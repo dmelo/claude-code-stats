@@ -83,7 +83,7 @@ struct ContentView: View {
         .frame(width: 280)
         .background(backgroundColor)
         .task {
-            await viewModel.refresh()
+            await viewModel.refreshIfNeeded()
         }
     }
 
@@ -215,6 +215,17 @@ class UsageViewModel: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    func refreshIfNeeded() async {
+        // Only auto-refresh if no data or more than 1 minute since last update
+        if let lastUpdated = webUsage?.lastUpdated {
+            let elapsed = Date().timeIntervalSince(lastUpdated)
+            if elapsed < 60 {
+                return
+            }
+        }
+        await refresh()
     }
 
     private func startAutoRefresh() {
