@@ -1,0 +1,46 @@
+name: Build and Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    name: Build macOS App
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build app
+        run: |
+          cd ClaudeCodeStats
+          xcodebuild -project ClaudeCodeStats.xcodeproj \
+            -scheme ClaudeCodeStats \
+            -configuration Release \
+            -derivedDataPath build \
+            -arch arm64 -arch x86_64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Create ZIP archive
+        run: |
+          cd ClaudeCodeStats/build/Build/Products/Release
+          zip -r ClaudeCodeStats-${{ github.ref_name }}.zip ClaudeCodeStats.app
+          mv ClaudeCodeStats-${{ github.ref_name }}.zip ${{ github.workspace }}/
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ClaudeCodeStats-${{ github.ref_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
