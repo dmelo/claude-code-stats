@@ -39,7 +39,7 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 
 ### Option 2: Download Release
 
-Download the latest `.app` from the [Releases](https://github.com/yourusername/claude-code-stats/releases) page and drag it to your Applications folder.
+Download the latest `.app` from the [Releases](https://github.com/dmelo/claude-code-stats/releases) page and drag it to your Applications folder.
 
 ## Setup
 

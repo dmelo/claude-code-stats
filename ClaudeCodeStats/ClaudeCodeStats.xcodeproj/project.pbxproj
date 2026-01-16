@@ -9,13 +9,8 @@
 /* Begin PBXBuildFile section */
 		A01 /* ClaudeCodeStatsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01 /* ClaudeCodeStatsApp.swift */; };
 		A02 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02 /* ContentView.swift */; };
-		A03 /* UsageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B03 /* UsageData.swift */; };
-		A04 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B04 /* KeychainService.swift */; };
-		A05 /* UsageAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B05 /* UsageAPIService.swift */; };
 		A06 /* ProgressBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06 /* ProgressBarView.swift */; };
 		A07 /* UsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07 /* UsageCardView.swift */; };
-		A08 /* LocalStatsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10 /* LocalStatsService.swift */; };
-		A09 /* LocalStatsCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11 /* LocalStatsCardView.swift */; };
 		A10 /* WebSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12 /* WebSessionService.swift */; };
 		A11 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B13 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
@@ -23,15 +18,10 @@
 /* Begin PBXFileReference section */
 		B01 /* ClaudeCodeStatsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCodeStatsApp.swift; sourceTree = "<group>"; };
 		B02 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		B03 /* UsageData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageData.swift; sourceTree = "<group>"; };
-		B04 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
-		B05 /* UsageAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageAPIService.swift; sourceTree = "<group>"; };
 		B06 /* ProgressBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressBarView.swift; sourceTree = "<group>"; };
 		B07 /* UsageCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCardView.swift; sourceTree = "<group>"; };
 		B08 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B09 /* ClaudeCodeStats.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ClaudeCodeStats.entitlements; sourceTree = "<group>"; };
-		B10 /* LocalStatsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStatsService.swift; sourceTree = "<group>"; };
-		B11 /* LocalStatsCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStatsCardView.swift; sourceTree = "<group>"; };
 		B12 /* WebSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSessionService.swift; sourceTree = "<group>"; };
 		B13 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		P01 /* ClaudeCodeStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeCodeStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -61,7 +51,6 @@
 			children = (
 				B01 /* ClaudeCodeStatsApp.swift */,
 				B02 /* ContentView.swift */,
-				G03 /* Models */,
 				G04 /* Services */,
 				G05 /* Views */,
 				B08 /* Info.plist */,
@@ -70,20 +59,9 @@
 			path = ClaudeCodeStats;
 			sourceTree = "<group>";
 		};
-		G03 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				B03 /* UsageData.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
 		G04 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				B04 /* KeychainService.swift */,
-				B05 /* UsageAPIService.swift */,
-				B10 /* LocalStatsService.swift */,
 				B12 /* WebSessionService.swift */,
 			);
 			path = Services;
@@ -94,7 +72,6 @@
 			children = (
 				B06 /* ProgressBarView.swift */,
 				B07 /* UsageCardView.swift */,
-				B11 /* LocalStatsCardView.swift */,
 				B13 /* SettingsView.swift */,
 			);
 			path = Views;
@@ -178,13 +155,8 @@
 			files = (
 				A01 /* ClaudeCodeStatsApp.swift in Sources */,
 				A02 /* ContentView.swift in Sources */,
-				A03 /* UsageData.swift in Sources */,
-				A04 /* KeychainService.swift in Sources */,
-				A05 /* UsageAPIService.swift in Sources */,
 				A06 /* ProgressBarView.swift in Sources */,
 				A07 /* UsageCardView.swift in Sources */,
-				A08 /* LocalStatsService.swift in Sources */,
-				A09 /* LocalStatsCardView.swift in Sources */,
 				A10 /* WebSessionService.swift in Sources */,
 				A11 /* SettingsView.swift in Sources */,
 			);
