@@ -58,6 +58,7 @@ enum WebSessionError: Error, LocalizedError {
     case unauthorized
     case noOrganization
     case decodingError(Error)
+    case cloudflareChallenge
 
     var errorDescription: String? {
         switch self {
@@ -73,6 +74,8 @@ enum WebSessionError: Error, LocalizedError {
             return "Could not find organization."
         case .decodingError:
             return "Failed to parse usage data."
+        case .cloudflareChallenge:
+            return "Blocked by Cloudflare. Visit claude.ai in browser, then refresh."
         }
     }
 }
@@ -176,21 +179,49 @@ class WebSessionService {
             throw WebSessionError.invalidResponse
         }
 
+        // Check for Cloudflare challenge (returns HTML instead of JSON)
+        if let htmlString = String(data: data, encoding: .utf8),
+           htmlString.contains("Just a moment") || htmlString.contains("cf_clearance") {
+            throw WebSessionError.cloudflareChallenge
+        }
+
         do {
             let usageResponse = try JSONDecoder().decode(WebUsageResponse.self, from: data)
             return parseResponse(usageResponse)
         } catch {
+            // If decoding fails, check if it's HTML (Cloudflare challenge)
+            if let htmlString = String(data: data, encoding: .utf8),
+               htmlString.contains("<!DOCTYPE html>") {
+                throw WebSessionError.cloudflareChallenge
+            }
             throw WebSessionError.decodingError(error)
         }
     }
 
     private func configureRequest(_ request: inout URLRequest, sessionKey: String) {
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // Core headers
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("sessionKey=\(sessionKey)", forHTTPHeaderField: "Cookie")
+
+        // Browser identification
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
+        request.setValue("\"Google Chrome\";v=\"143\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"", forHTTPHeaderField: "sec-ch-ua")
+        request.setValue("?0", forHTTPHeaderField: "sec-ch-ua-mobile")
+        request.setValue("\"macOS\"", forHTTPHeaderField: "sec-ch-ua-platform")
+
+        // Fetch metadata
+        request.setValue("empty", forHTTPHeaderField: "sec-fetch-dest")
+        request.setValue("cors", forHTTPHeaderField: "sec-fetch-mode")
+        request.setValue("same-origin", forHTTPHeaderField: "sec-fetch-site")
+
+        // Anthropic headers
         request.setValue("web_claude_ai", forHTTPHeaderField: "anthropic-client-platform")
         request.setValue("https://claude.ai/settings/usage", forHTTPHeaderField: "Referer")
+        request.setValue("https://claude.ai", forHTTPHeaderField: "Origin")
+
+        // Additional browser headers
+        request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
     }
 
     private func parseResponse(_ response: WebUsageResponse) -> WebUsageData {
