@@ -3,7 +3,9 @@ import SwiftUI
 struct SettingsView: View {
     @Binding var isPresented: Bool
     @State private var sessionKey: String = ""
+    @State private var fullCookies: String = ""
     @State private var showingInstructions = false
+    @State private var showingAdvanced = false
 
     private var backgroundColor: Color {
         Color(red: 26/255, green: 26/255, blue: 26/255)
@@ -99,13 +101,76 @@ struct SettingsView: View {
                     .background(cardBackground)
                     .cornerRadius(8)
 
+                    // Advanced Section (Full Cookies)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button(action: { showingAdvanced.toggle() }) {
+                            HStack {
+                                Text("Cloudflare Bypass")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.white)
+
+                                Spacer()
+
+                                Image(systemName: showingAdvanced ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(textSecondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        if showingAdvanced {
+                            Text("If you see 'Blocked by Cloudflare', paste the full cookie string from your browser:")
+                                .font(.system(size: 10))
+                                .foregroundColor(textSecondary)
+
+                            TextField("Paste full cookie string", text: $fullCookies, axis: .vertical)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 10, design: .monospaced))
+                                .lineLimit(3...5)
+                                .padding(8)
+                                .background(Color(red: 35/255, green: 35/255, blue: 35/255))
+                                .cornerRadius(6)
+                                .foregroundColor(.white)
+
+                            advancedInstructionsView
+
+                            HStack {
+                                Button("Save Cookies") {
+                                    WebSessionService.shared.fullCookies = fullCookies
+                                    WebSessionService.shared.organizationId = nil
+                                    isPresented = false
+                                }
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5)
+                                .background(Color.orange)
+                                .cornerRadius(6)
+                                .buttonStyle(.plain)
+
+                                if WebSessionService.shared.fullCookies != nil {
+                                    Button("Clear") {
+                                        WebSessionService.shared.fullCookies = nil
+                                        fullCookies = ""
+                                    }
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.red)
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(cardBackground)
+                    .cornerRadius(8)
+
                     // Status
                     HStack {
                         Circle()
                             .fill(WebSessionService.shared.hasSessionKey ? Color.green : Color.red)
                             .frame(width: 8, height: 8)
 
-                        Text(WebSessionService.shared.hasSessionKey ? "Session configured" : "No session configured")
+                        Text(statusText)
                             .font(.system(size: 11))
                             .foregroundColor(textSecondary)
                     }
@@ -117,6 +182,17 @@ struct SettingsView: View {
         .background(backgroundColor)
         .onAppear {
             sessionKey = WebSessionService.shared.sessionKey ?? ""
+            fullCookies = WebSessionService.shared.fullCookies ?? ""
+        }
+    }
+
+    private var statusText: String {
+        if WebSessionService.shared.fullCookies != nil {
+            return "Using full cookies (Cloudflare bypass)"
+        } else if WebSessionService.shared.hasSessionKey {
+            return "Session configured"
+        } else {
+            return "No session configured"
         }
     }
 
@@ -141,6 +217,26 @@ struct SettingsView: View {
                 .padding(.top, 4)
         }
         .padding(10)
+        .background(Color(red: 35/255, green: 35/255, blue: 35/255))
+        .cornerRadius(6)
+    }
+
+    private var advancedInstructionsView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("How to get full cookies:")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.white)
+
+            Group {
+                Text("1. Open claude.ai/settings/usage")
+                Text("2. DevTools → Network tab → Refresh")
+                Text("3. Click any request → Headers tab")
+                Text("4. Copy entire 'Cookie:' value")
+            }
+            .font(.system(size: 9))
+            .foregroundColor(textSecondary)
+        }
+        .padding(8)
         .background(Color(red: 35/255, green: 35/255, blue: 35/255))
         .cornerRadius(6)
     }

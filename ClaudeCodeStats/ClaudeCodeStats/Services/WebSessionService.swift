@@ -84,6 +84,7 @@ class WebSessionService {
     static let shared = WebSessionService()
     private let baseURL = "https://claude.ai/api"
     private let sessionKeyKey = "claudeSessionKey"
+    private let fullCookiesKey = "claudeFullCookies"
     private let orgIdKey = "claudeOrgId"
 
     private init() {}
@@ -91,6 +92,12 @@ class WebSessionService {
     var sessionKey: String? {
         get { UserDefaults.standard.string(forKey: sessionKeyKey) }
         set { UserDefaults.standard.set(newValue, forKey: sessionKeyKey) }
+    }
+
+    /// Full cookie string from browser (includes cf_clearance for Cloudflare bypass)
+    var fullCookies: String? {
+        get { UserDefaults.standard.string(forKey: fullCookiesKey) }
+        set { UserDefaults.standard.set(newValue, forKey: fullCookiesKey) }
     }
 
     var organizationId: String? {
@@ -103,8 +110,27 @@ class WebSessionService {
         return !key.isEmpty
     }
 
+    /// Returns the cookie string to use - combines fullCookies with sessionKey if needed
+    var effectiveCookies: String? {
+        if let full = fullCookies, !full.isEmpty {
+            // If full cookies already contains sessionKey, use as-is
+            if full.contains("sessionKey=") {
+                return full
+            }
+            // Otherwise, prepend sessionKey if we have it
+            if let key = sessionKey, !key.isEmpty {
+                return "sessionKey=\(key); \(full)"
+            }
+            return full
+        }
+        if let key = sessionKey, !key.isEmpty {
+            return "sessionKey=\(key)"
+        }
+        return nil
+    }
+
     func fetchUsage() async throws -> WebUsageData {
-        guard let sessionKey = sessionKey, !sessionKey.isEmpty else {
+        guard let cookies = effectiveCookies else {
             throw WebSessionError.noSessionKey
         }
 
@@ -113,22 +139,22 @@ class WebSessionService {
         if let existingOrgId = organizationId {
             orgId = existingOrgId
         } else {
-            orgId = try await fetchOrganizationId(sessionKey: sessionKey)
+            orgId = try await fetchOrganizationId(cookies: cookies)
             organizationId = orgId
         }
 
         // Fetch usage
-        return try await fetchUsageForOrg(orgId: orgId, sessionKey: sessionKey)
+        return try await fetchUsageForOrg(orgId: orgId, cookies: cookies)
     }
 
-    private func fetchOrganizationId(sessionKey: String) async throws -> String {
+    private func fetchOrganizationId(cookies: String) async throws -> String {
         guard let url = URL(string: "\(baseURL)/organizations") else {
             throw WebSessionError.invalidResponse
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        configureRequest(&request, sessionKey: sessionKey)
+        configureRequest(&request, cookies: cookies)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -149,14 +175,14 @@ class WebSessionService {
         return firstOrg.uuid
     }
 
-    private func fetchUsageForOrg(orgId: String, sessionKey: String) async throws -> WebUsageData {
+    private func fetchUsageForOrg(orgId: String, cookies: String) async throws -> WebUsageData {
         guard let url = URL(string: "\(baseURL)/organizations/\(orgId)/usage") else {
             throw WebSessionError.invalidResponse
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        configureRequest(&request, sessionKey: sessionKey)
+        configureRequest(&request, cookies: cookies)
 
         let (data, response): (Data, URLResponse)
         do {
@@ -190,19 +216,22 @@ class WebSessionService {
             return parseResponse(usageResponse)
         } catch {
             // If decoding fails, check if it's HTML (Cloudflare challenge)
-            if let htmlString = String(data: data, encoding: .utf8),
-               htmlString.contains("<!DOCTYPE html>") {
-                throw WebSessionError.cloudflareChallenge
+            if let responseString = String(data: data, encoding: .utf8) {
+                if responseString.contains("<!DOCTYPE html>") || responseString.contains("Just a moment") {
+                    throw WebSessionError.cloudflareChallenge
+                }
+                // Log first 200 chars for debugging
+                print("API Response: \(String(responseString.prefix(200)))")
             }
             throw WebSessionError.decodingError(error)
         }
     }
 
-    private func configureRequest(_ request: inout URLRequest, sessionKey: String) {
+    private func configureRequest(_ request: inout URLRequest, cookies: String) {
         // Core headers
         request.setValue("*/*", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("sessionKey=\(sessionKey)", forHTTPHeaderField: "Cookie")
+        request.setValue(cookies, forHTTPHeaderField: "Cookie")
 
         // Browser identification
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
@@ -253,6 +282,7 @@ class WebSessionService {
 
     func clearSession() {
         sessionKey = nil
+        fullCookies = nil
         organizationId = nil
     }
 }
