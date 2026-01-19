@@ -86,8 +86,30 @@ class WebSessionService {
     private let sessionKeyKey = "claudeSessionKey"
     private let fullCookiesKey = "claudeFullCookies"
     private let orgIdKey = "claudeOrgId"
+    private let deviceIdKey = "claudeDeviceId"
+    private let anonymousIdKey = "claudeAnonymousId"
 
     private init() {}
+
+    /// Persistent device ID (generated once, reused)
+    var deviceId: String {
+        if let existing = UserDefaults.standard.string(forKey: deviceIdKey) {
+            return existing
+        }
+        let newId = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(newId, forKey: deviceIdKey)
+        return newId
+    }
+
+    /// Persistent anonymous ID (generated once, reused)
+    var anonymousId: String {
+        if let existing = UserDefaults.standard.string(forKey: anonymousIdKey) {
+            return existing
+        }
+        let newId = "claudeai.v1.\(UUID().uuidString.lowercased())"
+        UserDefaults.standard.set(newId, forKey: anonymousIdKey)
+        return newId
+    }
 
     var sessionKey: String? {
         get { UserDefaults.standard.string(forKey: sessionKeyKey) }
@@ -244,8 +266,13 @@ class WebSessionService {
         request.setValue("cors", forHTTPHeaderField: "sec-fetch-mode")
         request.setValue("same-origin", forHTTPHeaderField: "sec-fetch-site")
 
-        // Anthropic headers
+        // Anthropic client headers (mimics real web app)
         request.setValue("web_claude_ai", forHTTPHeaderField: "anthropic-client-platform")
+        request.setValue("1.0.0", forHTTPHeaderField: "anthropic-client-version")
+        request.setValue(deviceId, forHTTPHeaderField: "anthropic-device-id")
+        request.setValue(anonymousId, forHTTPHeaderField: "anthropic-anonymous-id")
+
+        // Page context
         request.setValue("https://claude.ai/settings/usage", forHTTPHeaderField: "Referer")
         request.setValue("https://claude.ai", forHTTPHeaderField: "Origin")
 
