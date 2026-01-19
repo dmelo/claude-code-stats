@@ -22,11 +22,22 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 
 ## Installation
 
-### Option 1: Build from Source
+### Option 1: Homebrew (Recommended)
+
+```bash
+brew tap dmelo/tap
+brew install --cask claude-code-stats
+```
+
+### Option 2: Download Release
+
+Download the latest `.app` from the [Releases](https://github.com/dmelo/claude-code-stats/releases) page and drag it to your Applications folder.
+
+### Option 3: Build from Source
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/claude-code-stats.git
+   git clone https://github.com/dmelo/claude-code-stats.git
    cd claude-code-stats
    ```
 
@@ -36,10 +47,6 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
    ```
 
 3. Build and run (⌘R)
-
-### Option 2: Download Release
-
-Download the latest `.app` from the [Releases](https://github.com/dmelo/claude-code-stats/releases) page and drag it to your Applications folder.
 
 ## Setup
 
@@ -99,12 +106,8 @@ ClaudeCodeStats/
 └── ClaudeCodeStats/
     ├── ClaudeCodeStatsApp.swift    # App entry point
     ├── ContentView.swift            # Main popover view
-    ├── Models/
-    │   └── UsageData.swift          # Data models
     ├── Services/
-    │   ├── WebSessionService.swift  # Claude.ai API client
-    │   ├── KeychainService.swift    # Keychain access
-    │   └── LocalStatsService.swift  # Local stats fallback
+    │   └── WebSessionService.swift  # Claude.ai API client
     └── Views/
         ├── UsageCardView.swift      # Usage card component
         ├── ProgressBarView.swift    # Progress bar component
