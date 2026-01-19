@@ -23,6 +23,10 @@ jobs:
 
       - name: Build app
         run: |
+          # Extract version without 'v' prefix
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+
           cd ClaudeCodeStats
           xcodebuild -project ClaudeCodeStats.xcodeproj \
             -scheme ClaudeCodeStats \
@@ -33,6 +37,8 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="1" \
             build
 
       - name: Create ZIP archive

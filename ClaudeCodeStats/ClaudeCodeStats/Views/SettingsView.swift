@@ -173,6 +173,12 @@ struct SettingsView: View {
                         Text(statusText)
                             .font(.system(size: 11))
                             .foregroundColor(textSecondary)
+
+                        Spacer()
+
+                        Text("v\(appVersion)")
+                            .font(.system(size: 10))
+                            .foregroundColor(textSecondary)
                     }
                 }
                 .padding(12)
@@ -194,6 +200,10 @@ struct SettingsView: View {
         } else {
             return "No session configured"
         }
+    }
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
     }
 
     private var instructionsView: some View {
