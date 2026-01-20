@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = UsageViewModel()
     @State private var showingSettings = false
+    @State private var isSpinning = false
 
     private var backgroundColor: Color {
         Color(red: 26/255, green: 26/255, blue: 26/255)
@@ -52,12 +53,22 @@ struct ContentView: View {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
                         .foregroundColor(textSecondary)
-                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                        .animation(viewModel.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                        .rotationEffect(.degrees(isSpinning ? 360 : 0))
                 }
                 .buttonStyle(.plain)
                 .disabled(viewModel.isLoading)
                 .padding(.leading, 8)
+                .onChange(of: viewModel.isLoading) { _, loading in
+                    if loading {
+                        withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                            isSpinning = true
+                        }
+                    } else {
+                        withAnimation(.default) {
+                            isSpinning = false
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
