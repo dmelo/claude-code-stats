@@ -21,7 +21,7 @@ struct WebUsageResponse: Codable {
 
 struct WebUsageWindow: Codable {
     let utilization: Double
-    let resetsAt: String
+    let resetsAt: String?
 
     enum CodingKeys: String, CodingKey {
         case utilization
@@ -292,9 +292,9 @@ class WebSessionService {
             dateFormatter.date(from: string) ?? fallbackFormatter.date(from: string) ?? Date()
         }
 
-        let sessionResetsAt = response.fiveHour.map { parseDate($0.resetsAt) } ?? Date()
-        let weeklyResetsAt = response.sevenDay.map { parseDate($0.resetsAt) } ?? Date()
-        let sonnetResetsAt = response.sevenDaySonnet.map { parseDate($0.resetsAt) }
+        let sessionResetsAt = response.fiveHour?.resetsAt.flatMap { parseDate($0) } ?? Date()
+        let weeklyResetsAt = response.sevenDay?.resetsAt.flatMap { parseDate($0) } ?? Date()
+        let sonnetResetsAt = response.sevenDaySonnet?.resetsAt.flatMap { parseDate($0) }
 
         return WebUsageData(
             sessionUsage: response.fiveHour?.utilization ?? 0,
