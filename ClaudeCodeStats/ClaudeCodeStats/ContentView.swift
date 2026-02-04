@@ -173,6 +173,10 @@ struct ContentView: View {
 
             Spacer()
 
+            statusIndicatorView
+
+            Spacer()
+
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
@@ -182,6 +186,41 @@ struct ContentView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+    }
+
+    private var statusIndicatorView: some View {
+        Button(action: {
+            if let url = URL(string: "https://status.claude.com") {
+                NSWorkspace.shared.open(url)
+            }
+        }) {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(viewModel.statusColor)
+                    .frame(width: 6, height: 6)
+
+                Text(viewModel.statusText)
+                    .font(.system(size: 10))
+                    .foregroundColor(textSecondary)
+
+                if viewModel.isStatusLoading {
+                    ProgressView()
+                        .scaleEffect(0.4)
+                        .frame(width: 10, height: 10)
+                } else {
+                    Button(action: {
+                        Task { await viewModel.refreshStatus() }
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 8))
+                            .foregroundColor(textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help("Click to view full status history")
     }
 
     private var lastUpdatedString: String {
@@ -209,10 +248,36 @@ class UsageViewModel: ObservableObject {
     @Published var error: String?
     @Published var isLoading = false
 
+    // Status properties
+    @Published var claudeStatus: ClaudeStatus?
+    @Published var isStatusLoading = false
+
     private var refreshTimer: Timer?
 
     init() {
         startAutoRefresh()
+    }
+
+    var statusColor: Color {
+        guard let status = claudeStatus else { return .gray }
+        switch status.indicator {
+        case "none": return .green
+        case "minor": return .yellow
+        case "major": return .orange
+        case "critical": return .red
+        default: return .gray
+        }
+    }
+
+    var statusText: String {
+        guard let status = claudeStatus else { return "Status" }
+        switch status.indicator {
+        case "none": return "Operational"
+        case "minor": return "Minor"
+        case "major": return "Outage"
+        case "critical": return "Critical"
+        default: return "Unknown"
+        }
     }
 
     func refresh() async {
@@ -226,6 +291,20 @@ class UsageViewModel: ObservableObject {
         }
 
         isLoading = false
+
+        // Also refresh status
+        await refreshStatus()
+    }
+
+    func refreshStatus() async {
+        isStatusLoading = true
+        do {
+            claudeStatus = try await StatusService.shared.fetchStatus()
+        } catch {
+            // Silently fail - status is non-critical
+            claudeStatus = nil
+        }
+        isStatusLoading = false
     }
 
     func refreshIfNeeded() async {
@@ -233,6 +312,10 @@ class UsageViewModel: ObservableObject {
         if let lastUpdated = webUsage?.lastUpdated {
             let elapsed = Date().timeIntervalSince(lastUpdated)
             if elapsed < 60 {
+                // Still refresh status if we haven't fetched it yet
+                if claudeStatus == nil {
+                    await refreshStatus()
+                }
                 return
             }
         }
