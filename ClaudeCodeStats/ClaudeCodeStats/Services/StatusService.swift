@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct ClaudeStatusResponse: Codable {
     let status: ClaudeStatus
@@ -7,6 +8,26 @@ struct ClaudeStatusResponse: Codable {
 struct ClaudeStatus: Codable {
     let indicator: String  // "none", "minor", "major", "critical"
     let description: String
+
+    var color: Color {
+        switch indicator {
+        case "none": return .green
+        case "minor": return .yellow
+        case "major": return .orange
+        case "critical": return .red
+        default: return .gray
+        }
+    }
+
+    var displayText: String {
+        switch indicator {
+        case "none": return "Operational"
+        case "minor": return "Degraded"
+        case "major": return "Outage"
+        case "critical": return "Critical"
+        default: return "Unknown"
+        }
+    }
 }
 
 class StatusService {

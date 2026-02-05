@@ -212,7 +212,7 @@ struct ContentView: View {
                 }
             }
             .buttonStyle(.plain)
-            .help("Click to view full status history")
+            .help(viewModel.claudeStatus?.description ?? "Click to view full status history")
 
             if !viewModel.isStatusLoading {
                 Button(action: {
@@ -223,6 +223,7 @@ struct ContentView: View {
                         .foregroundColor(textSecondary)
                 }
                 .buttonStyle(.plain)
+                .help("Refresh status")
             }
         }
     }
@@ -263,25 +264,11 @@ class UsageViewModel: ObservableObject {
     }
 
     var statusColor: Color {
-        guard let status = claudeStatus else { return .gray }
-        switch status.indicator {
-        case "none": return .green
-        case "minor": return .yellow
-        case "major": return .orange
-        case "critical": return .red
-        default: return .gray
-        }
+        claudeStatus?.color ?? .gray
     }
 
     var statusText: String {
-        guard let status = claudeStatus else { return "Status" }
-        switch status.indicator {
-        case "none": return "Operational"
-        case "minor": return "Minor"
-        case "major": return "Outage"
-        case "critical": return "Critical"
-        default: return "Unknown"
-        }
+        claudeStatus?.displayText ?? "Status"
     }
 
     func refresh() async {
@@ -301,13 +288,14 @@ class UsageViewModel: ObservableObject {
     }
 
     func refreshStatus() async {
+        guard !isStatusLoading else { return }
         isStatusLoading = true
+        defer { isStatusLoading = false }
         do {
             claudeStatus = try await StatusService.shared.fetchStatus()
         } catch {
             // Silently fail - status is non-critical; keep last known status
         }
-        isStatusLoading = false
     }
 
     func refreshIfNeeded() async {
