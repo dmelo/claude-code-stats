@@ -212,7 +212,7 @@ struct ContentView: View {
                 }
             }
             .buttonStyle(.plain)
-            .help(viewModel.claudeStatus?.description ?? "Click to view full status history")
+            .help(viewModel.claudeStatus?.description ?? "View Claude status page")
 
             if !viewModel.isStatusLoading {
                 Button(action: {
