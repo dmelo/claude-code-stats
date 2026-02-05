@@ -1,53 +1,5 @@
 import Foundation
 
-// MARK: - Claude Status API
-
-struct ClaudeStatusResponse: Codable {
-    let status: ClaudeStatus
-}
-
-struct ClaudeStatus: Codable {
-    let indicator: String  // "none", "minor", "major", "critical"
-    let description: String
-}
-
-enum StatusIndicator: String {
-    case operational = "none"
-    case minor = "minor"
-    case major = "major"
-    case critical = "critical"
-    case unknown = "unknown"
-
-    var displayText: String {
-        switch self {
-        case .operational: return "Operational"
-        case .minor: return "Minor Issue"
-        case .major: return "Major Outage"
-        case .critical: return "Critical"
-        case .unknown: return "Unknown"
-        }
-    }
-}
-
-class StatusService {
-    static let shared = StatusService()
-    private let statusURL = "https://status.claude.com/api/v2/status.json"
-
-    private init() {}
-
-    func fetchStatus() async throws -> ClaudeStatus {
-        guard let url = URL(string: statusURL) else {
-            throw URLError(.badURL)
-        }
-
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let response = try JSONDecoder().decode(ClaudeStatusResponse.self, from: data)
-        return response.status
-    }
-}
-
-// MARK: - Usage API
-
 struct Organization: Codable {
     let uuid: String
     let name: String

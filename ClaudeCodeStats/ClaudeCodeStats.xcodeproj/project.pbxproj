@@ -13,6 +13,7 @@
 		A07 /* UsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07 /* UsageCardView.swift */; };
 		A10 /* WebSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12 /* WebSessionService.swift */; };
 		A11 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B13 /* SettingsView.swift */; };
+		A12 /* StatusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14 /* StatusService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +25,7 @@
 		B09 /* ClaudeCodeStats.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ClaudeCodeStats.entitlements; sourceTree = "<group>"; };
 		B12 /* WebSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSessionService.swift; sourceTree = "<group>"; };
 		B13 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B14 /* StatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusService.swift; sourceTree = "<group>"; };
 		P01 /* ClaudeCodeStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeCodeStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -62,6 +64,7 @@
 		G04 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B14 /* StatusService.swift */,
 				B12 /* WebSessionService.swift */,
 			);
 			path = Services;
@@ -159,6 +162,7 @@
 				A07 /* UsageCardView.swift in Sources */,
 				A10 /* WebSessionService.swift in Sources */,
 				A11 /* SettingsView.swift in Sources */,
+				A12 /* StatusService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

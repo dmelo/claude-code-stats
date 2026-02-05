@@ -189,38 +189,42 @@ struct ContentView: View {
     }
 
     private var statusIndicatorView: some View {
-        Button(action: {
-            if let url = URL(string: "https://status.claude.com") {
-                NSWorkspace.shared.open(url)
-            }
-        }) {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(viewModel.statusColor)
-                    .frame(width: 6, height: 6)
+        HStack(spacing: 4) {
+            Button(action: {
+                if let url = URL(string: "https://status.claude.com") {
+                    NSWorkspace.shared.open(url)
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(viewModel.statusColor)
+                        .frame(width: 6, height: 6)
 
-                Text(viewModel.statusText)
-                    .font(.system(size: 10))
-                    .foregroundColor(textSecondary)
+                    Text(viewModel.statusText)
+                        .font(.system(size: 10))
+                        .foregroundColor(textSecondary)
 
-                if viewModel.isStatusLoading {
-                    ProgressView()
-                        .scaleEffect(0.4)
-                        .frame(width: 10, height: 10)
-                } else {
-                    Button(action: {
-                        Task { await viewModel.refreshStatus() }
-                    }) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 8))
-                            .foregroundColor(textSecondary)
+                    if viewModel.isStatusLoading {
+                        ProgressView()
+                            .scaleEffect(0.4)
+                            .frame(width: 10, height: 10)
                     }
-                    .buttonStyle(.plain)
                 }
             }
+            .buttonStyle(.plain)
+            .help("Click to view full status history")
+
+            if !viewModel.isStatusLoading {
+                Button(action: {
+                    Task { await viewModel.refreshStatus() }
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 8))
+                        .foregroundColor(textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
-        .help("Click to view full status history")
     }
 
     private var lastUpdatedString: String {
@@ -301,8 +305,7 @@ class UsageViewModel: ObservableObject {
         do {
             claudeStatus = try await StatusService.shared.fetchStatus()
         } catch {
-            // Silently fail - status is non-critical
-            claudeStatus = nil
+            // Silently fail - status is non-critical; keep last known status
         }
         isStatusLoading = false
     }
