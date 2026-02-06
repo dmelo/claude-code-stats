@@ -30,7 +30,7 @@ class VersionService {
             let pipe = Pipe()
 
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-            process.arguments = ["-l", "-c", "claude --version"]
+            process.arguments = ["-li", "-c", "claude --version"]
             process.standardOutput = pipe
             process.standardError = FileHandle.nullDevice
 
@@ -148,15 +148,17 @@ class UpdateChecker: ObservableObject {
             return
         }
         lastCheckDate = Date()
-        do {
-            async let installed = VersionService.shared.fetchInstalledVersion()
-            async let latest = VersionService.shared.fetchLatestVersion()
-            let (installedResult, latestResult) = try await (installed, latest)
-            self.installedVersion = installedResult
-            self.latestVersion = latestResult
-        } catch {
-            // Silently fail — version check is non-critical
-        }
+
+        async let installedResult: String? = {
+            try? await VersionService.shared.fetchInstalledVersion()
+        }()
+        async let latestResult: String? = {
+            try? await VersionService.shared.fetchLatestVersion()
+        }()
+
+        let (installed, latest) = await (installedResult, latestResult)
+        if let installed { self.installedVersion = installed }
+        if let latest { self.latestVersion = latest }
     }
 
     func dismiss() {
