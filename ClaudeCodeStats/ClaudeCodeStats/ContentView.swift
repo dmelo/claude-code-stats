@@ -379,4 +379,5 @@ class UsageViewModel: ObservableObject {
 
 #Preview {
     ContentView()
+        .environmentObject(UpdateChecker())
 }

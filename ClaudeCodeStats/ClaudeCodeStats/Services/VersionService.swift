@@ -43,6 +43,11 @@ class VersionService {
 
             process.waitUntilExit()
 
+            guard process.terminationStatus == 0 else {
+                continuation.resume(throwing: VersionError.parseError)
+                return
+            }
+
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             guard let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !output.isEmpty else {
@@ -70,6 +75,7 @@ class VersionService {
 
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("ClaudeCodeStats/1.0", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await session.data(for: request)
 
@@ -98,6 +104,7 @@ class UpdateChecker: ObservableObject {
     @AppStorage("dismissedUpdateVersion") var dismissedVersion: String = ""
 
     private var timer: Timer?
+    private var lastCheckDate: Date?
 
     var hasChecked: Bool {
         installedVersion != nil && latestVersion != nil
@@ -137,6 +144,10 @@ class UpdateChecker: ObservableObject {
     }
 
     func checkForUpdate() async {
+        if let last = lastCheckDate, Date().timeIntervalSince(last) < 1800 {
+            return
+        }
+        lastCheckDate = Date()
         do {
             async let installed = VersionService.shared.fetchInstalledVersion()
             async let latest = VersionService.shared.fetchLatestVersion()
@@ -155,7 +166,8 @@ class UpdateChecker: ObservableObject {
     }
 
     func openChangelog() {
-        if let url = URL(string: "https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md") {
+        if let version = latestVersion ?? installedVersion,
+           let url = URL(string: "https://github.com/anthropics/claude-code/releases/tag/v\(version)") {
             NSWorkspace.shared.open(url)
         }
     }
