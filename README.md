@@ -11,6 +11,8 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 - **Weekly Limits** - All models combined usage with reset time
 - **Sonnet Only** - Separate tracking for Sonnet model usage
 - **Auto-refresh** - Updates every 5 minutes automatically
+- **Claude service status** - Live status from [status.claude.com](https://status.claude.com) shown in the footer (Operational, Degraded, Outage, Critical)
+- **Version update detection** - Checks for new Claude Code releases hourly via GitHub; shows a red dot badge on the menu bar icon and a banner when an update is available, with a link to the changelog
 - **Native macOS app** - Built with SwiftUI, lightweight and fast
 - **Dark theme** - Matches macOS menu bar aesthetic
 
@@ -107,7 +109,9 @@ ClaudeCodeStats/
     ├── ClaudeCodeStatsApp.swift    # App entry point
     ├── ContentView.swift            # Main popover view
     ├── Services/
-    │   └── WebSessionService.swift  # Claude.ai API client
+    │   ├── WebSessionService.swift  # Claude.ai API client
+    │   ├── StatusService.swift      # Claude service health status
+    │   └── VersionService.swift     # Claude Code version update checker
     └── Views/
         ├── UsageCardView.swift      # Usage card component
         ├── ProgressBarView.swift    # Progress bar component
@@ -117,7 +121,7 @@ ClaudeCodeStats/
 ## Privacy
 
 - Your session cookie is stored locally in UserDefaults
-- The app only communicates with claude.ai to fetch your usage data
+- The app communicates with claude.ai to fetch your usage data, status.claude.com for service health, and the GitHub API for version checks
 - No data is sent to any third parties
 
 ## License

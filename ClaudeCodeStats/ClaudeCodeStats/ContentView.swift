@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = UsageViewModel()
+    @EnvironmentObject var updateChecker: UpdateChecker
     @State private var showingSettings = false
     @State private var isSpinning = false
 
@@ -85,6 +86,13 @@ struct ContentView: View {
                 loadingView
             }
 
+            // Version info
+            if updateChecker.hasUpdate {
+                updateBannerView
+            } else if updateChecker.isUpToDate {
+                upToDateView
+            }
+
             Divider()
                 .background(Color(red: 58/255, green: 58/255, blue: 58/255))
 
@@ -95,6 +103,7 @@ struct ContentView: View {
         .background(backgroundColor)
         .task {
             await viewModel.refreshIfNeeded()
+            await updateChecker.checkForUpdate()
         }
     }
 
@@ -228,6 +237,48 @@ struct ContentView: View {
         }
     }
 
+    private var updateBannerView: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.blue)
+
+            Button(action: { updateChecker.openChangelog() }) {
+                Text(updateChecker.updateText)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.blue)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button(action: { withAnimation { updateChecker.dismiss() } }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(textSecondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color.blue.opacity(0.1))
+    }
+
+    private var upToDateView: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.green)
+
+            Text(updateChecker.upToDateText)
+                .font(.system(size: 11))
+                .foregroundColor(textSecondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
     private var lastUpdatedString: String {
         guard let lastUpdated = viewModel.webUsage?.lastUpdated else {
             return "Not yet updated"
@@ -328,4 +379,5 @@ class UsageViewModel: ObservableObject {
 
 #Preview {
     ContentView()
+        .environmentObject(UpdateChecker())
 }
