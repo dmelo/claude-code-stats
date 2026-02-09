@@ -5,14 +5,6 @@ struct UsageCardView: View {
     let usage: Double
     let resetsAt: Date
 
-    private var cardBackground: Color {
-        Color(red: 42/255, green: 42/255, blue: 42/255)
-    }
-
-    private var textSecondary: Color {
-        Color(red: 138/255, green: 138/255, blue: 138/255)
-    }
-
     private var resetTimeString: String {
         let now = Date()
         let interval = resetsAt.timeIntervalSince(now)
@@ -52,10 +44,10 @@ struct UsageCardView: View {
 
             Text(resetTimeString)
                 .font(.system(size: 11))
-                .foregroundColor(textSecondary)
+                .foregroundColor(Theme.textSecondary)
         }
         .padding(12)
-        .background(cardBackground)
+        .background(Theme.cardBackground)
         .cornerRadius(8)
     }
 }
@@ -74,5 +66,5 @@ struct UsageCardView: View {
         )
     }
     .padding()
-    .background(Color(red: 26/255, green: 26/255, blue: 26/255))
+    .background(Theme.background)
 }
