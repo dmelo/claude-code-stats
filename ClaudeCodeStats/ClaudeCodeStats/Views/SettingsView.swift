@@ -6,6 +6,8 @@ struct SettingsView: View {
     @State private var fullCookies: String = ""
     @State private var showingInstructions = false
     @State private var showingAdvanced = false
+    @AppStorage("showSessionInMenuBar") private var showSession = false
+    @AppStorage("showWeeklyInMenuBar") private var showWeekly = false
 
     private var backgroundColor: Color {
         Color(red: 26/255, green: 26/255, blue: 26/255)
@@ -159,6 +161,28 @@ struct SettingsView: View {
                                 }
                             }
                         }
+                    }
+                    .padding(12)
+                    .background(cardBackground)
+                    .cornerRadius(8)
+
+                    // Menu Bar Display Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Menu Bar Display")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+
+                        Toggle("Show session usage", isOn: $showSession)
+                            .font(.system(size: 11))
+                            .foregroundColor(textSecondary)
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
+
+                        Toggle("Show weekly usage", isOn: $showWeekly)
+                            .font(.system(size: 11))
+                            .foregroundColor(textSecondary)
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
                     }
                     .padding(12)
                     .background(cardBackground)

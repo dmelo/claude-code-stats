@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = UsageViewModel()
+    @EnvironmentObject var viewModel: UsageViewModel
     @EnvironmentObject var updateChecker: UpdateChecker
     @State private var showingSettings = false
     @State private var isSpinning = false
@@ -380,4 +380,5 @@ class UsageViewModel: ObservableObject {
 #Preview {
     ContentView()
         .environmentObject(UpdateChecker())
+        .environmentObject(UsageViewModel())
 }
