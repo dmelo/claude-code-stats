@@ -55,14 +55,12 @@ struct ClaudeCodeStatsApp: App {
         if let weekly { segments.append(("W", weekly)) }
 
         // Measure total width
-        let separatorWidth: CGFloat = segments.count > 1 ? 12 : 0  // " | "
+        let separatorWidth: CGFloat = segments.count > 1
+            ? (" | " as NSString).size(withAttributes: textAttrs).width : 0
         var totalWidth: CGFloat = 0
-        var segmentWidths: [CGFloat] = []
         for (label, _) in segments {
             let labelSize = (label as NSString).size(withAttributes: textAttrs)
-            let w = labelSize.width + 2 + ringSize  // label + gap + ring
-            segmentWidths.append(w)
-            totalWidth += w
+            totalWidth += labelSize.width + 2 + ringSize  // label + gap + ring
         }
         totalWidth += separatorWidth
 
