@@ -14,15 +14,11 @@ struct ProgressBarView: View {
         }
     }
 
-    private var trackColor: Color {
-        Color(red: 58/255, green: 58/255, blue: 58/255)
-    }
-
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: height / 2)
-                    .fill(trackColor)
+                    .fill(Theme.divider)
                     .frame(height: height)
 
                 RoundedRectangle(cornerRadius: height / 2)
@@ -42,5 +38,5 @@ struct ProgressBarView: View {
         ProgressBarView(progress: 85)
     }
     .padding()
-    .background(Color(red: 26/255, green: 26/255, blue: 26/255))
+    .background(Theme.background)
 }

@@ -9,18 +9,6 @@ struct SettingsView: View {
     @AppStorage("showSessionInMenuBar") private var showSession = false
     @AppStorage("showWeeklyInMenuBar") private var showWeekly = false
 
-    private var backgroundColor: Color {
-        Color(red: 26/255, green: 26/255, blue: 26/255)
-    }
-
-    private var cardBackground: Color {
-        Color(red: 42/255, green: 42/255, blue: 42/255)
-    }
-
-    private var textSecondary: Color {
-        Color(red: 138/255, green: 138/255, blue: 138/255)
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -42,7 +30,7 @@ struct SettingsView: View {
             .padding(.vertical, 12)
 
             Divider()
-                .background(Color(red: 58/255, green: 58/255, blue: 58/255))
+                .background(Theme.divider)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -67,7 +55,7 @@ struct SettingsView: View {
                             .textFieldStyle(.plain)
                             .font(.system(size: 12, design: .monospaced))
                             .padding(8)
-                            .background(cardBackground)
+                            .background(Theme.cardBackground)
                             .cornerRadius(6)
                             .foregroundColor(.white)
 
@@ -100,7 +88,7 @@ struct SettingsView: View {
                         }
                     }
                     .padding(12)
-                    .background(cardBackground)
+                    .background(Theme.cardBackground)
                     .cornerRadius(8)
 
                     // Advanced Section (Full Cookies)
@@ -115,7 +103,7 @@ struct SettingsView: View {
 
                                 Image(systemName: showingAdvanced ? "chevron.up" : "chevron.down")
                                     .font(.system(size: 10))
-                                    .foregroundColor(textSecondary)
+                                    .foregroundColor(Theme.textSecondary)
                             }
                         }
                         .buttonStyle(.plain)
@@ -123,14 +111,14 @@ struct SettingsView: View {
                         if showingAdvanced {
                             Text("If you see 'Blocked by Cloudflare', paste the full cookie string from your browser:")
                                 .font(.system(size: 10))
-                                .foregroundColor(textSecondary)
+                                .foregroundColor(Theme.textSecondary)
 
                             TextField("Paste full cookie string", text: $fullCookies, axis: .vertical)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 10, design: .monospaced))
                                 .lineLimit(3...5)
                                 .padding(8)
-                                .background(Color(red: 35/255, green: 35/255, blue: 35/255))
+                                .background(Theme.inputBackground)
                                 .cornerRadius(6)
                                 .foregroundColor(.white)
 
@@ -163,7 +151,7 @@ struct SettingsView: View {
                         }
                     }
                     .padding(12)
-                    .background(cardBackground)
+                    .background(Theme.cardBackground)
                     .cornerRadius(8)
 
                     menuBarDisplaySection
@@ -176,20 +164,20 @@ struct SettingsView: View {
 
                         Text(statusText)
                             .font(.system(size: 11))
-                            .foregroundColor(textSecondary)
+                            .foregroundColor(Theme.textSecondary)
 
                         Spacer()
 
                         Text("v\(appVersion)")
                             .font(.system(size: 10))
-                            .foregroundColor(textSecondary)
+                            .foregroundColor(Theme.textSecondary)
                     }
                 }
                 .padding(12)
             }
         }
         .frame(width: 280)
-        .background(backgroundColor)
+        .background(Theme.background)
         .onAppear {
             sessionKey = WebSessionService.shared.sessionKey ?? ""
             fullCookies = WebSessionService.shared.fullCookies ?? ""
@@ -242,19 +230,19 @@ struct SettingsView: View {
             Group {
                 Text("1. Open claude.ai in your browser")
                 Text("2. Open Developer Tools (Cmd+Option+I)")
-                Text("3. Go to Application → Cookies → claude.ai")
+                Text("3. Go to Application \u{2192} Cookies \u{2192} claude.ai")
                 Text("4. Find 'sessionKey' and copy its value")
             }
             .font(.system(size: 10))
-            .foregroundColor(textSecondary)
+            .foregroundColor(Theme.textSecondary)
 
-            Text("⚠️ Keep this private - it grants access to your account")
+            Text("\u{26A0}\u{FE0F} Keep this private - it grants access to your account")
                 .font(.system(size: 10))
                 .foregroundColor(.orange)
                 .padding(.top, 4)
         }
         .padding(10)
-        .background(Color(red: 35/255, green: 35/255, blue: 35/255))
+        .background(Theme.inputBackground)
         .cornerRadius(6)
     }
 
@@ -266,15 +254,15 @@ struct SettingsView: View {
 
             Group {
                 Text("1. Open claude.ai/settings/usage")
-                Text("2. DevTools → Network tab → Refresh")
-                Text("3. Click any request → Headers tab")
+                Text("2. DevTools \u{2192} Network tab \u{2192} Refresh")
+                Text("3. Click any request \u{2192} Headers tab")
                 Text("4. Copy entire 'Cookie:' value")
             }
             .font(.system(size: 9))
-            .foregroundColor(textSecondary)
+            .foregroundColor(Theme.textSecondary)
         }
         .padding(8)
-        .background(Color(red: 35/255, green: 35/255, blue: 35/255))
+        .background(Theme.inputBackground)
         .cornerRadius(6)
     }
 }

@@ -6,14 +6,6 @@ struct ContentView: View {
     @State private var showingSettings = false
     @State private var isSpinning = false
 
-    private var backgroundColor: Color {
-        Color(red: 26/255, green: 26/255, blue: 26/255)
-    }
-
-    private var textSecondary: Color {
-        Color(red: 138/255, green: 138/255, blue: 138/255)
-    }
-
     var body: some View {
         if showingSettings {
             SettingsView(isPresented: $showingSettings)
@@ -44,7 +36,7 @@ struct ContentView: View {
                 Button(action: { showingSettings = true }) {
                     Image(systemName: "gearshape")
                         .font(.system(size: 12))
-                        .foregroundColor(textSecondary)
+                        .foregroundColor(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
 
@@ -53,7 +45,7 @@ struct ContentView: View {
                 }) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12))
-                        .foregroundColor(textSecondary)
+                        .foregroundColor(Theme.textSecondary)
                         .rotationEffect(.degrees(isSpinning ? 360 : 0))
                 }
                 .buttonStyle(.plain)
@@ -75,7 +67,7 @@ struct ContentView: View {
             .padding(.vertical, 12)
 
             Divider()
-                .background(Color(red: 58/255, green: 58/255, blue: 58/255))
+                .background(Theme.divider)
 
             // Content
             if let error = viewModel.error {
@@ -94,13 +86,13 @@ struct ContentView: View {
             }
 
             Divider()
-                .background(Color(red: 58/255, green: 58/255, blue: 58/255))
+                .background(Theme.divider)
 
             // Footer
             footerView
         }
         .frame(width: 280)
-        .background(backgroundColor)
+        .background(Theme.background)
         .task {
             await viewModel.refreshIfNeeded()
             await updateChecker.checkForUpdate()
@@ -138,7 +130,7 @@ struct ContentView: View {
                 .scaleEffect(0.8)
             Text("Loading usage data...")
                 .font(.system(size: 12))
-                .foregroundColor(textSecondary)
+                .foregroundColor(Theme.textSecondary)
         }
         .frame(height: 150)
         .padding(12)
@@ -152,7 +144,7 @@ struct ContentView: View {
 
             Text(error)
                 .font(.system(size: 12))
-                .foregroundColor(textSecondary)
+                .foregroundColor(Theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
@@ -178,7 +170,7 @@ struct ContentView: View {
         HStack {
             Text(lastUpdatedString)
                 .font(.system(size: 10))
-                .foregroundColor(textSecondary)
+                .foregroundColor(Theme.textSecondary)
 
             Spacer()
 
@@ -190,7 +182,7 @@ struct ContentView: View {
                 NSApplication.shared.terminate(nil)
             }
             .font(.system(size: 10))
-            .foregroundColor(textSecondary)
+            .foregroundColor(Theme.textSecondary)
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
@@ -211,7 +203,7 @@ struct ContentView: View {
 
                     Text(viewModel.statusText)
                         .font(.system(size: 10))
-                        .foregroundColor(textSecondary)
+                        .foregroundColor(Theme.textSecondary)
 
                     if viewModel.isStatusLoading {
                         ProgressView()
@@ -229,7 +221,7 @@ struct ContentView: View {
                 }) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 8))
-                        .foregroundColor(textSecondary)
+                        .foregroundColor(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .help("Refresh status")
@@ -256,7 +248,7 @@ struct ContentView: View {
             Button(action: { withAnimation { updateChecker.dismiss() } }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(textSecondary)
+                    .foregroundColor(Theme.textSecondary)
             }
             .buttonStyle(.plain)
         }
@@ -273,7 +265,7 @@ struct ContentView: View {
 
             Text(updateChecker.upToDateText)
                 .font(.system(size: 11))
-                .foregroundColor(textSecondary)
+                .foregroundColor(Theme.textSecondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -295,85 +287,6 @@ struct ContentView: View {
             formatter.timeStyle = .short
             return "Updated at \(formatter.string(from: lastUpdated))"
         }
-    }
-}
-
-@MainActor
-class UsageViewModel: ObservableObject {
-    @Published var webUsage: WebUsageData?
-    @Published var error: String?
-    @Published var isLoading = false
-
-    // Status properties
-    @Published var claudeStatus: ClaudeStatus?
-    @Published var isStatusLoading = false
-
-    private var refreshTimer: Timer?
-
-    init() {
-        startAutoRefresh()
-    }
-
-    var statusColor: Color {
-        claudeStatus?.color ?? .gray
-    }
-
-    var statusText: String {
-        claudeStatus?.displayText ?? "Status"
-    }
-
-    func refresh() async {
-        isLoading = true
-        error = nil
-
-        do {
-            webUsage = try await WebSessionService.shared.fetchUsage()
-        } catch {
-            self.error = error.localizedDescription
-        }
-
-        isLoading = false
-
-        // Also refresh status
-        await refreshStatus()
-    }
-
-    func refreshStatus() async {
-        guard !isStatusLoading else { return }
-        isStatusLoading = true
-        defer { isStatusLoading = false }
-        do {
-            claudeStatus = try await StatusService.shared.fetchStatus()
-        } catch {
-            // Silently fail - status is non-critical; keep last known status
-        }
-    }
-
-    func refreshIfNeeded() async {
-        // Only auto-refresh if no data or more than 1 minute since last update
-        if let lastUpdated = webUsage?.lastUpdated {
-            let elapsed = Date().timeIntervalSince(lastUpdated)
-            if elapsed < 60 {
-                // Still refresh status if we haven't fetched it yet
-                if claudeStatus == nil {
-                    await refreshStatus()
-                }
-                return
-            }
-        }
-        await refresh()
-    }
-
-    private func startAutoRefresh() {
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                await self?.refresh()
-            }
-        }
-    }
-
-    deinit {
-        refreshTimer?.invalidate()
     }
 }
 

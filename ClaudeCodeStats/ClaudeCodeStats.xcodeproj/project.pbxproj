@@ -15,6 +15,10 @@
 		A11 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B13 /* SettingsView.swift */; };
 		A12 /* StatusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14 /* StatusService.swift */; };
 		A13 /* VersionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B15 /* VersionService.swift */; };
+		A14 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16 /* Theme.swift */; };
+		A15 /* UsageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17 /* UsageViewModel.swift */; };
+		A16 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B18 /* UpdateChecker.swift */; };
+		A17 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19 /* Models.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +32,10 @@
 		B13 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B14 /* StatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusService.swift; sourceTree = "<group>"; };
 		B15 /* VersionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionService.swift; sourceTree = "<group>"; };
+		B16 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		B17 /* UsageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageViewModel.swift; sourceTree = "<group>"; };
+		B18 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
+		B19 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		P01 /* ClaudeCodeStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeCodeStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -55,6 +63,10 @@
 			children = (
 				B01 /* ClaudeCodeStatsApp.swift */,
 				B02 /* ContentView.swift */,
+				B19 /* Models.swift */,
+				B16 /* Theme.swift */,
+				B18 /* UpdateChecker.swift */,
+				B17 /* UsageViewModel.swift */,
 				G04 /* Services */,
 				G05 /* Views */,
 				B08 /* Info.plist */,
@@ -167,6 +179,10 @@
 				A11 /* SettingsView.swift in Sources */,
 				A12 /* StatusService.swift in Sources */,
 				A13 /* VersionService.swift in Sources */,
+				A14 /* Theme.swift in Sources */,
+				A15 /* UsageViewModel.swift in Sources */,
+				A16 /* UpdateChecker.swift in Sources */,
+				A17 /* Models.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
