@@ -206,18 +206,18 @@ struct SettingsView: View {
 
             Toggle("Show session usage", isOn: $showSession)
                 .font(.system(size: 11))
-                .foregroundColor(textSecondary)
+                .foregroundColor(Theme.textSecondary)
                 .toggleStyle(.switch)
                 .controlSize(.mini)
 
             Toggle("Show weekly usage", isOn: $showWeekly)
                 .font(.system(size: 11))
-                .foregroundColor(textSecondary)
+                .foregroundColor(Theme.textSecondary)
                 .toggleStyle(.switch)
                 .controlSize(.mini)
         }
         .padding(12)
-        .background(cardBackground)
+        .background(Theme.cardBackground)
         .cornerRadius(8)
     }
 
