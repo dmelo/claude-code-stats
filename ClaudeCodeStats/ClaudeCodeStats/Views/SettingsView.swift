@@ -166,27 +166,7 @@ struct SettingsView: View {
                     .background(cardBackground)
                     .cornerRadius(8)
 
-                    // Menu Bar Display Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Menu Bar Display")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white)
-
-                        Toggle("Show session usage", isOn: $showSession)
-                            .font(.system(size: 11))
-                            .foregroundColor(textSecondary)
-                            .toggleStyle(.switch)
-                            .controlSize(.mini)
-
-                        Toggle("Show weekly usage", isOn: $showWeekly)
-                            .font(.system(size: 11))
-                            .foregroundColor(textSecondary)
-                            .toggleStyle(.switch)
-                            .controlSize(.mini)
-                    }
-                    .padding(12)
-                    .background(cardBackground)
-                    .cornerRadius(8)
+                    menuBarDisplaySection
 
                     // Status
                     HStack {
@@ -228,6 +208,29 @@ struct SettingsView: View {
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    private var menuBarDisplaySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Menu Bar Display")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white)
+
+            Toggle("Show session usage", isOn: $showSession)
+                .font(.system(size: 11))
+                .foregroundColor(textSecondary)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+
+            Toggle("Show weekly usage", isOn: $showWeekly)
+                .font(.system(size: 11))
+                .foregroundColor(textSecondary)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        }
+        .padding(12)
+        .background(cardBackground)
+        .cornerRadius(8)
     }
 
     private var instructionsView: some View {
