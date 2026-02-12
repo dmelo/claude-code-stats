@@ -42,6 +42,8 @@ There are no tests or linters configured.
 - `@AppStorage` for persisted user preferences (e.g. dismissed update version)
 - Auto-refresh timers: 5 min for usage, 1 hour for version checks
 - The app sandbox is disabled (`com.apple.security.app-sandbox = false`)
+- Colors are defined in `Theme.swift` (`Theme.background`, `Theme.cardBackground`, `Theme.textSecondary`, etc.) — always use `Theme.*` constants, never inline color literals or local computed properties
+- Large SwiftUI `body` properties must be split into extracted computed properties (e.g. `menuBarDisplaySection`) — CI uses Xcode 16.2 whose Swift type-checker fails on complex single-body expressions that may compile locally on newer Xcode
 
 ## Xcode Project
 
