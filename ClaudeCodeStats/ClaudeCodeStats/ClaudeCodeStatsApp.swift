@@ -107,8 +107,9 @@ struct ClaudeCodeStatsApp: App {
         ctx.strokePath()
 
         // Progress arc
-        let endAngle = startAngle - CGFloat(min(progress / 100, 1.0)) * 2 * .pi
-        ctx.setStrokeColor(ringColor(for: progress).cgColor)
+        let clamped = max(0.0, min(progress, 100.0))
+        let endAngle = startAngle - CGFloat(clamped / 100.0) * 2 * .pi
+        ctx.setStrokeColor(ringColor(for: clamped).cgColor)
         ctx.setLineWidth(lineWidth)
         ctx.setLineCap(.round)
         ctx.addArc(center: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
