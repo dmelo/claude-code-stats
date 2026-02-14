@@ -12,8 +12,23 @@ class UsageViewModel: ObservableObject {
 
     private var refreshTimer: Timer?
 
+    var backgroundRefreshEnabled: Bool = false {
+        didSet {
+            guard backgroundRefreshEnabled != oldValue else { return }
+            if backgroundRefreshEnabled {
+                Task { await refresh() }
+                startAutoRefresh()
+            } else {
+                refreshTimer?.invalidate()
+                refreshTimer = nil
+            }
+        }
+    }
+
     init() {
-        startAutoRefresh()
+        Task {
+            await refresh()
+        }
     }
 
     var statusColor: Color {
