@@ -16,6 +16,7 @@ class UsageViewModel: ObservableObject {
         didSet {
             guard backgroundRefreshEnabled != oldValue else { return }
             if backgroundRefreshEnabled {
+                Task { await refresh() }
                 startAutoRefresh()
             } else {
                 refreshTimer?.invalidate()
