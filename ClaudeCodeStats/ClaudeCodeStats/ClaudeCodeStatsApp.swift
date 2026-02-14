@@ -37,6 +37,12 @@ struct ClaudeCodeStatsApp: App {
                         .offset(x: 4, y: -3)
                 }
             }
+            .onAppear {
+                viewModel.backgroundRefreshEnabled = showRings
+            }
+            .onChange(of: showRings) { _, newValue in
+                viewModel.backgroundRefreshEnabled = newValue
+            }
         }
         .menuBarExtraStyle(.window)
     }
