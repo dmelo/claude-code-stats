@@ -53,6 +53,11 @@ When adding new `.swift` files, they must be added to `project.pbxproj` in four 
 3. The appropriate `PBXGroup` (Services or Views)
 4. `PBXSourcesBuildPhase` files list
 
+## Branch Naming
+
+- `fix/<description>` — bug fixes (e.g. `fix/version-check-cancellation`)
+- `<feature-name>` — new features and enhancements (e.g. `menubar`)
+
 ## Commit Style
 
 Imperative mood, concise first line describing the change. Examples:
