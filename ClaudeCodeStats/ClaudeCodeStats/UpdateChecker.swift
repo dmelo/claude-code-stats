@@ -44,13 +44,15 @@ class UpdateChecker: ObservableObject {
 
     init() {
         startHourlyCheck()
+        Task {
+            await checkForUpdate()
+        }
     }
 
     func checkForUpdate() async {
         if let last = lastCheckDate, Date().timeIntervalSince(last) < 1800 {
             return
         }
-        lastCheckDate = Date()
 
         async let installedResult: String? = {
             try? await VersionService.shared.fetchInstalledVersion()
@@ -62,6 +64,8 @@ class UpdateChecker: ObservableObject {
         let (installed, latest) = await (installedResult, latestResult)
         if let installed { self.installedVersion = installed }
         if let latest { self.latestVersion = latest }
+
+        lastCheckDate = Date()
     }
 
     func dismiss() {
