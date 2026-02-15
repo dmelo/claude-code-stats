@@ -8,6 +8,7 @@ class UpdateChecker: ObservableObject {
 
     private var timer: Timer?
     private var lastCheckDate: Date?
+    private var isChecking = false
 
     var hasChecked: Bool {
         installedVersion != nil && latestVersion != nil
@@ -50,9 +51,12 @@ class UpdateChecker: ObservableObject {
     }
 
     func checkForUpdate() async {
+        if isChecking { return }
         if let last = lastCheckDate, Date().timeIntervalSince(last) < 1800 {
             return
         }
+        isChecking = true
+        defer { isChecking = false }
 
         async let installedResult: String? = {
             try? await VersionService.shared.fetchInstalledVersion()
