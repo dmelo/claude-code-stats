@@ -7,6 +7,7 @@ struct UsageSnapshot: Codable {
     let sonnetUsage: Double?
 }
 
+@MainActor
 class UsageHistoryService {
     static let shared = UsageHistoryService()
 
@@ -37,7 +38,11 @@ class UsageHistoryService {
             sonnetUsage: usage.sonnetUsage
         )
         snapshots.append(snapshot)
-        try? writeToDisk()
+        do {
+            try writeToDisk()
+        } catch {
+            print("UsageHistoryService: Failed to write to disk: \(error)")
+        }
     }
 
     func loadHistory() -> [UsageSnapshot] {

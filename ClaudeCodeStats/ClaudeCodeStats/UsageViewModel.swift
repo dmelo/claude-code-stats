@@ -44,8 +44,9 @@ class UsageViewModel: ObservableObject {
         error = nil
 
         do {
-            webUsage = try await WebSessionService.shared.fetchUsage()
-            UsageHistoryService.shared.record(webUsage!)
+            let usage = try await WebSessionService.shared.fetchUsage()
+            webUsage = usage
+            UsageHistoryService.shared.record(usage)
         } catch {
             self.error = error.localizedDescription
         }
