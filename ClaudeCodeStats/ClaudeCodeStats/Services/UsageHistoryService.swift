@@ -5,6 +5,15 @@ struct UsageSnapshot: Codable {
     let sessionUsage: Double
     let weeklyUsage: Double
     let sonnetUsage: Double?
+    let sessionResetsAt: Date?
+    let weeklyResetsAt: Date?
+}
+
+struct SessionSummary {
+    let sessionResetsAt: Date
+    let peakUsage: Double
+    let firstSeen: Date
+    let lastSeen: Date
 }
 
 @MainActor
@@ -35,7 +44,9 @@ class UsageHistoryService {
             timestamp: Date(),
             sessionUsage: usage.sessionUsage,
             weeklyUsage: usage.weeklyUsage,
-            sonnetUsage: usage.sonnetUsage
+            sonnetUsage: usage.sonnetUsage,
+            sessionResetsAt: usage.sessionResetsAt,
+            weeklyResetsAt: usage.weeklyResetsAt
         )
         snapshots.append(snapshot)
         do {
@@ -47,6 +58,25 @@ class UsageHistoryService {
 
     func loadHistory() -> [UsageSnapshot] {
         return snapshots
+    }
+
+    func loadSessionSummaries() -> [SessionSummary] {
+        let withSession = snapshots.filter { $0.sessionResetsAt != nil }
+
+        // Round to nearest minute to avoid grouping artifacts from slight API timestamp drift
+        let grouped = Dictionary(grouping: withSession) {
+            Date(timeIntervalSinceReferenceDate: ($0.sessionResetsAt!.timeIntervalSinceReferenceDate / 60).rounded() * 60)
+        }
+
+        return grouped.map { resetsAt, snaps in
+            SessionSummary(
+                sessionResetsAt: resetsAt,
+                peakUsage: snaps.map(\.sessionUsage).max() ?? 0,
+                firstSeen: snaps.map(\.timestamp).min() ?? resetsAt,
+                lastSeen: snaps.map(\.timestamp).max() ?? resetsAt
+            )
+        }
+        .sorted { $0.sessionResetsAt < $1.sessionResetsAt }
     }
 
     private func loadFromDisk() throws -> [UsageSnapshot] {

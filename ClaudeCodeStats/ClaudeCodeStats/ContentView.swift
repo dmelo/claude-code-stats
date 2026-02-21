@@ -120,6 +120,10 @@ struct ContentView: View {
                     resetsAt: sonnetResetsAt
                 )
             }
+
+            if !viewModel.sessionSummaries.isEmpty {
+                UsageHistoryChartView(sessions: viewModel.sessionSummaries)
+            }
         }
         .padding(12)
     }

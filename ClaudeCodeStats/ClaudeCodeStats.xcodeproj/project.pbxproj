@@ -20,6 +20,7 @@
 		A16 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B18 /* UpdateChecker.swift */; };
 		A17 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19 /* Models.swift */; };
 		A18 /* UsageHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20 /* UsageHistoryService.swift */; };
+		A19 /* UsageHistoryChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21 /* UsageHistoryChartView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +39,7 @@
 		B18 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		B19 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B20 /* UsageHistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageHistoryService.swift; sourceTree = "<group>"; };
+		B21 /* UsageHistoryChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageHistoryChartView.swift; sourceTree = "<group>"; };
 		P01 /* ClaudeCodeStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeCodeStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -93,6 +95,7 @@
 			children = (
 				B06 /* ProgressBarView.swift */,
 				B07 /* UsageCardView.swift */,
+				B21 /* UsageHistoryChartView.swift */,
 				B13 /* SettingsView.swift */,
 			);
 			path = Views;
@@ -187,6 +190,7 @@
 				A16 /* UpdateChecker.swift in Sources */,
 				A17 /* Models.swift in Sources */,
 				A18 /* UsageHistoryService.swift in Sources */,
+				A19 /* UsageHistoryChartView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

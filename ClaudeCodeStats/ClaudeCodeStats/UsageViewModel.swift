@@ -3,6 +3,7 @@ import SwiftUI
 @MainActor
 class UsageViewModel: ObservableObject {
     @Published var webUsage: WebUsageData?
+    @Published var sessionSummaries: [SessionSummary] = []
     @Published var error: String?
     @Published var isLoading = false
 
@@ -26,6 +27,7 @@ class UsageViewModel: ObservableObject {
     }
 
     init() {
+        sessionSummaries = UsageHistoryService.shared.loadSessionSummaries()
         Task {
             await refresh()
         }
@@ -47,6 +49,7 @@ class UsageViewModel: ObservableObject {
             let usage = try await WebSessionService.shared.fetchUsage()
             webUsage = usage
             UsageHistoryService.shared.record(usage)
+            sessionSummaries = UsageHistoryService.shared.loadSessionSummaries()
         } catch {
             self.error = error.localizedDescription
         }
