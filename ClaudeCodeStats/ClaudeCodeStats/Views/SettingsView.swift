@@ -16,13 +16,13 @@ struct SettingsView: View {
                 Button(action: { isPresented = false }) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 12))
-                        .foregroundColor(.white)
+                        .foregroundColor(Theme.textPrimary)
                 }
                 .buttonStyle(.plain)
 
                 Text("Settings")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.textPrimary)
 
                 Spacer()
             }
@@ -39,7 +39,7 @@ struct SettingsView: View {
                         HStack {
                             Text("Session Cookie")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.textPrimary)
 
                             Spacer()
 
@@ -57,7 +57,7 @@ struct SettingsView: View {
                             .padding(8)
                             .background(Theme.cardBackground)
                             .cornerRadius(6)
-                            .foregroundColor(.white)
+                            .foregroundColor(Theme.textPrimary)
 
                         if showingInstructions {
                             instructionsView
@@ -97,7 +97,7 @@ struct SettingsView: View {
                             HStack {
                                 Text("Cloudflare Bypass")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(Theme.textPrimary)
 
                                 Spacer()
 
@@ -120,7 +120,7 @@ struct SettingsView: View {
                                 .padding(8)
                                 .background(Theme.inputBackground)
                                 .cornerRadius(6)
-                                .foregroundColor(.white)
+                                .foregroundColor(Theme.textPrimary)
 
                             advancedInstructionsView
 
@@ -202,7 +202,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Menu Bar Display")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(Theme.textPrimary)
 
             Toggle("Show session usage", isOn: $showSession)
                 .font(.system(size: 11))
@@ -225,7 +225,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("To get your session cookie:")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(Theme.textPrimary)
 
             Group {
                 Text("1. Open claude.ai in your browser")
@@ -250,7 +250,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("How to get full cookies:")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(Theme.textPrimary)
 
             Group {
                 Text("1. Open claude.ai/settings/usage")
