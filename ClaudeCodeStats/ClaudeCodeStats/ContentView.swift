@@ -25,11 +25,11 @@ struct ContentView: View {
             HStack {
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.textPrimary)
 
                 Text("Claude Code Stats")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.textPrimary)
 
                 Spacer()
 

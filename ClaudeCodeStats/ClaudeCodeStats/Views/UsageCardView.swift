@@ -31,14 +31,14 @@ struct UsageCardView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(Theme.textPrimary)
 
             HStack(spacing: 12) {
                 ProgressBarView(progress: usage)
 
                 Text("\(Int(usage))%")
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(Theme.textPrimary)
                     .frame(width: 40, alignment: .trailing)
             }
 
