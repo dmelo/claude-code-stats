@@ -9,12 +9,11 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 - **Real-time usage data** - Shows your actual usage from Anthropic's servers
 - **Current Session** - 5-hour rolling window usage with reset countdown
 - **Weekly Limits** - All models combined usage with reset time
-- **Sonnet Only** - Separate tracking for Sonnet model usage
 - **Auto-refresh** - Updates every 5 minutes automatically
 - **Claude service status** - Live status from [status.claude.com](https://status.claude.com) shown in the footer (Operational, Degraded, Outage, Critical)
 - **Version update detection** - Checks for new Claude Code releases hourly via GitHub; shows a red dot badge on the menu bar icon and a banner when an update is available, with a link to the changelog
 - **Native macOS app** - Built with SwiftUI, lightweight and fast
-- **Dark theme** - Matches macOS menu bar aesthetic
+- **Light/dark theme** - Adapts to macOS appearance
 
 ## Requirements
 
@@ -52,14 +51,11 @@ Download the latest `.app` from the [Releases](https://github.com/dmelo/claude-c
 
 ## Setup
 
-1. Launch the app - a chart icon will appear in your menu bar
-2. Click the icon, then click **⚙️** (settings) or **"Configure Session"**
-3. Get your session cookie from claude.ai:
-   - Open https://claude.ai in your browser
-   - Open Developer Tools (`Cmd + Option + I`)
-   - Go to **Application** → **Cookies** → **https://claude.ai**
-   - Find `sessionKey` and copy its value
-4. Paste the value in the app and click **Save**
+1. Make sure Claude Code is installed and you're logged in (`claude` in your terminal)
+2. Launch the app - a chart icon will appear in your menu bar
+3. Click the icon to see your usage data
+
+The app reads your OAuth credentials from `~/.claude/.credentials.json` (created automatically when you log in to Claude Code). No manual configuration needed.
 
 ## Usage
 
@@ -69,7 +65,6 @@ Click the menu bar icon to see your current usage:
 |--------|-------------|
 | **Current Session** | Usage in the current 5-hour window |
 | **Weekly Limit** | Combined usage across all models (resets weekly) |
-| **Sonnet Only** | Sonnet-specific usage tracking |
 
 The progress bars change color based on usage:
 - 🟢 Green: 0-50%
@@ -82,14 +77,6 @@ To launch automatically when you log in:
 
 1. Open **System Settings** → **General** → **Login Items**
 2. Click **+** and add ClaudeCodeStats
-
-## Session Cookie Expiration
-
-The claude.ai session cookie expires periodically. When you see an "unauthorized" error:
-
-1. Click the ⚙️ icon
-2. Get a fresh `sessionKey` from claude.ai (see Setup step 3)
-3. Paste and save
 
 ## Building
 
@@ -109,7 +96,7 @@ ClaudeCodeStats/
     ├── ClaudeCodeStatsApp.swift    # App entry point
     ├── ContentView.swift            # Main popover view
     ├── Services/
-    │   ├── WebSessionService.swift  # Claude.ai API client
+    │   ├── OAuthUsageService.swift  # Anthropic API usage via OAuth
     │   ├── StatusService.swift      # Claude service health status
     │   └── VersionService.swift     # Claude Code version update checker
     └── Views/
@@ -120,8 +107,8 @@ ClaudeCodeStats/
 
 ## Privacy
 
-- Your session cookie is stored locally in UserDefaults
-- The app communicates with claude.ai to fetch your usage data, status.claude.com for service health, and the GitHub API for version checks
+- The app reads OAuth credentials from `~/.claude/.credentials.json` (no secrets are stored by the app itself)
+- The app communicates with the Anthropic API to fetch usage data, status.claude.com for service health, and the GitHub API for version checks
 - No data is sent to any third parties
 
 ## License
