@@ -4,7 +4,15 @@ struct UsageSnapshot: Codable {
     let timestamp: Date
     let sessionUsage: Double
     let weeklyUsage: Double
+    // sonnetUsage removed — kept optional for backward compatibility with old data
     let sonnetUsage: Double?
+
+    init(timestamp: Date, sessionUsage: Double, weeklyUsage: Double) {
+        self.timestamp = timestamp
+        self.sessionUsage = sessionUsage
+        self.weeklyUsage = weeklyUsage
+        self.sonnetUsage = nil
+    }
 }
 
 @MainActor
@@ -34,8 +42,7 @@ class UsageHistoryService {
         let snapshot = UsageSnapshot(
             timestamp: Date(),
             sessionUsage: usage.sessionUsage,
-            weeklyUsage: usage.weeklyUsage,
-            sonnetUsage: usage.sonnetUsage
+            weeklyUsage: usage.weeklyUsage
         )
         snapshots.append(snapshot)
         do {

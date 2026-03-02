@@ -11,7 +11,7 @@
 		A02 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02 /* ContentView.swift */; };
 		A06 /* ProgressBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B06 /* ProgressBarView.swift */; };
 		A07 /* UsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07 /* UsageCardView.swift */; };
-		A10 /* WebSessionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12 /* WebSessionService.swift */; };
+		A10 /* OAuthUsageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12 /* OAuthUsageService.swift */; };
 		A11 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B13 /* SettingsView.swift */; };
 		A12 /* StatusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14 /* StatusService.swift */; };
 		A13 /* VersionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B15 /* VersionService.swift */; };
@@ -29,7 +29,7 @@
 		B07 /* UsageCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCardView.swift; sourceTree = "<group>"; };
 		B08 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B09 /* ClaudeCodeStats.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ClaudeCodeStats.entitlements; sourceTree = "<group>"; };
-		B12 /* WebSessionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSessionService.swift; sourceTree = "<group>"; };
+		B12 /* OAuthUsageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthUsageService.swift; sourceTree = "<group>"; };
 		B13 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B14 /* StatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusService.swift; sourceTree = "<group>"; };
 		B15 /* VersionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionService.swift; sourceTree = "<group>"; };
@@ -83,7 +83,7 @@
 				B14 /* StatusService.swift */,
 				B20 /* UsageHistoryService.swift */,
 				B15 /* VersionService.swift */,
-				B12 /* WebSessionService.swift */,
+				B12 /* OAuthUsageService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -178,7 +178,7 @@
 				A02 /* ContentView.swift in Sources */,
 				A06 /* ProgressBarView.swift in Sources */,
 				A07 /* UsageCardView.swift in Sources */,
-				A10 /* WebSessionService.swift in Sources */,
+				A10 /* OAuthUsageService.swift in Sources */,
 				A11 /* SettingsView.swift in Sources */,
 				A12 /* StatusService.swift in Sources */,
 				A13 /* VersionService.swift in Sources */,

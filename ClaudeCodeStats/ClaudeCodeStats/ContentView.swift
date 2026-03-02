@@ -113,14 +113,7 @@ struct ContentView: View {
                 resetsAt: usage.weeklyResetsAt
             )
 
-            if let sonnetUsage = usage.sonnetUsage, let sonnetResetsAt = usage.sonnetResetsAt {
-                UsageCardView(
-                    title: "Sonnet Only",
-                    usage: sonnetUsage,
-                    resetsAt: sonnetResetsAt
-                )
-            }
-        }
+}
         .padding(12)
     }
 
@@ -148,8 +141,8 @@ struct ContentView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            if !WebSessionService.shared.hasSessionKey {
-                Button("Configure Session") {
+            if !OAuthUsageService.shared.hasCredentials {
+                Button("How to fix") {
                     showingSettings = true
                 }
                 .font(.system(size: 12, weight: .medium))
