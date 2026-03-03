@@ -54,6 +54,11 @@ class OAuthUsageService {
             throw UsageError.tokenExpired
         }
 
+        // 2xx and 429 both carry valid rate-limit headers
+        guard (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 429 else {
+            throw UsageError.invalidResponse
+        }
+
         return parseHeaders(httpResponse)
     }
 
