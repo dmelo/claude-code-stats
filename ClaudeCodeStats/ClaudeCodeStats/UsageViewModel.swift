@@ -44,7 +44,7 @@ class UsageViewModel: ObservableObject {
         error = nil
 
         do {
-            let usage = try await WebSessionService.shared.fetchUsage()
+            let usage = try await OAuthUsageService.shared.fetchUsage()
             webUsage = usage
             UsageHistoryService.shared.record(usage)
         } catch {
