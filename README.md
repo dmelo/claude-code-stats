@@ -55,7 +55,7 @@ Download the latest `.app` from the [Releases](https://github.com/dmelo/claude-c
 2. Launch the app - a chart icon will appear in your menu bar
 3. Click the icon to see your usage data
 
-The app reads your OAuth credentials from `~/.claude/.credentials.json` (created automatically when you log in to Claude Code). No manual configuration needed.
+The app reads your OAuth credentials from `~/.claude/.credentials.json` or the macOS Keychain (created automatically when you log in to Claude Code). No manual configuration needed.
 
 ## Usage
 
@@ -107,7 +107,7 @@ ClaudeCodeStats/
 
 ## Privacy
 
-- The app reads OAuth credentials from `~/.claude/.credentials.json` (no secrets are stored by the app itself)
+- The app reads OAuth credentials from `~/.claude/.credentials.json` or the macOS Keychain (no secrets are stored by the app itself)
 - The app communicates with the Anthropic API to fetch usage data, status.claude.com for service health, and the GitHub API for version checks
 - No data is sent to any third parties
 

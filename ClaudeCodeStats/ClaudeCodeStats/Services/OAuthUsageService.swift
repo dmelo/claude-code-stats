@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 class OAuthUsageService {
     static let shared = OAuthUsageService()
@@ -8,6 +9,7 @@ class OAuthUsageService {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.claude/.credentials.json"
     }()
+    private let keychainService = "Claude Code-credentials"
 
     private init() {}
 
@@ -63,8 +65,41 @@ class OAuthUsageService {
     }
 
     private func readAccessToken() -> String? {
+        if let token = readTokenFromFile() {
+            return token
+        }
+        return readTokenFromKeychain()
+    }
+
+    private func readTokenFromFile() -> String? {
         guard let data = FileManager.default.contents(atPath: credentialsPath),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let token = extractToken(from: data) else {
+            return nil
+        }
+        return token
+    }
+
+    private func readTokenFromKeychain() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let token = extractToken(from: data) else {
+            return nil
+        }
+        return token
+    }
+
+    private func extractToken(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let oauth = json["claudeAiOauth"] as? [String: Any],
               let token = oauth["accessToken"] as? String,
               !token.isEmpty else {
