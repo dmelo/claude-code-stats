@@ -10,6 +10,8 @@ class OAuthUsageService {
         return "\(home)/.claude/.credentials.json"
     }()
     private let keychainService = "Claude Code-credentials"
+    private let appKeychainService = "ClaudeCodeStats-credentials"
+    private var cachedToken: String?
 
     private init() {}
 
@@ -53,6 +55,7 @@ class OAuthUsageService {
         }
 
         if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+            clearCachedToken()
             throw UsageError.tokenExpired
         }
 
@@ -65,10 +68,28 @@ class OAuthUsageService {
     }
 
     private func readAccessToken() -> String? {
-        if let token = readTokenFromFile() {
+        if let token = cachedToken {
             return token
         }
-        return readTokenFromKeychain()
+        if let token = readTokenFromFile() {
+            cachedToken = token
+            return token
+        }
+        if let token = readTokenFromAppKeychain() {
+            cachedToken = token
+            return token
+        }
+        if let token = readTokenFromKeychain(service: keychainService) {
+            saveTokenToAppKeychain(token)
+            cachedToken = token
+            return token
+        }
+        return nil
+    }
+
+    private func clearCachedToken() {
+        cachedToken = nil
+        deleteAppKeychainItem()
     }
 
     private func readTokenFromFile() -> String? {
@@ -79,10 +100,30 @@ class OAuthUsageService {
         return token
     }
 
-    private func readTokenFromKeychain() -> String? {
+    private func readTokenFromAppKeychain() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
+            kSecAttrService as String: appKeychainService,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let token = String(data: data, encoding: .utf8),
+              !token.isEmpty else {
+            return nil
+        }
+        return token
+    }
+
+    private func readTokenFromKeychain(service: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -96,6 +137,28 @@ class OAuthUsageService {
             return nil
         }
         return token
+    }
+
+    private func saveTokenToAppKeychain(_ token: String) {
+        guard let data = token.data(using: .utf8) else { return }
+
+        // Delete existing item first (if any)
+        deleteAppKeychainItem()
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: appKeychainService,
+            kSecValueData as String: data
+        ]
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    private func deleteAppKeychainItem() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: appKeychainService
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     private func extractToken(from data: Data) -> String? {
