@@ -1,6 +1,7 @@
 import Foundation
 import Security
 
+@MainActor
 class OAuthUsageService {
     static let shared = OAuthUsageService()
 
@@ -16,7 +17,10 @@ class OAuthUsageService {
     private init() {}
 
     var hasCredentials: Bool {
-        readAccessToken() != nil
+        cachedToken != nil
+            || readTokenFromFile() != nil
+            || readTokenFromAppKeychain() != nil
+            || readTokenFromKeychain(service: keychainService) != nil
     }
 
     func fetchUsage() async throws -> WebUsageData {
@@ -100,6 +104,7 @@ class OAuthUsageService {
         return token
     }
 
+    // App keychain stores the raw token string, not the JSON credential blob
     private func readTokenFromAppKeychain() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -150,7 +155,10 @@ class OAuthUsageService {
             kSecAttrService as String: appKeychainService,
             kSecValueData as String: data
         ]
-        SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status != errSecSuccess {
+            NSLog("OAuthUsageService: Failed to cache token in app keychain (status: \(status))")
+        }
     }
 
     private func deleteAppKeychainItem() {
@@ -158,7 +166,10 @@ class OAuthUsageService {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: appKeychainService
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            NSLog("OAuthUsageService: Failed to delete app keychain item (status: \(status))")
+        }
     }
 
     private func extractToken(from data: Data) -> String? {
