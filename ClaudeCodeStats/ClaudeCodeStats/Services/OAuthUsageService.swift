@@ -12,15 +12,13 @@ class OAuthUsageService {
     }()
     private let keychainService = "Claude Code-credentials"
     private let appKeychainService = "ClaudeCodeStats-credentials"
+    private let appKeychainAccount = "oauth-token"
     private var cachedToken: String?
 
     private init() {}
 
     var hasCredentials: Bool {
-        cachedToken != nil
-            || readTokenFromFile() != nil
-            || readTokenFromAppKeychain() != nil
-            || readTokenFromKeychain(service: keychainService) != nil
+        readAccessToken() != nil
     }
 
     func fetchUsage() async throws -> WebUsageData {
@@ -109,6 +107,7 @@ class OAuthUsageService {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: appKeychainService,
+            kSecAttrAccount as String: appKeychainAccount,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
@@ -153,6 +152,7 @@ class OAuthUsageService {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: appKeychainService,
+            kSecAttrAccount as String: appKeychainAccount,
             kSecValueData as String: data
         ]
         let status = SecItemAdd(query as CFDictionary, nil)
@@ -164,7 +164,8 @@ class OAuthUsageService {
     private func deleteAppKeychainItem() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: appKeychainService
+            kSecAttrService as String: appKeychainService,
+            kSecAttrAccount as String: appKeychainAccount
         ]
         let status = SecItemDelete(query as CFDictionary)
         if status != errSecSuccess && status != errSecItemNotFound {
