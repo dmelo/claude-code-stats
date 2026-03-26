@@ -57,7 +57,7 @@ class OAuthUsageService {
         }
 
         if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-            clearCachedToken()
+            clearTokenCaches()
             throw UsageError.tokenExpired
         }
 
@@ -89,7 +89,7 @@ class OAuthUsageService {
         return nil
     }
 
-    private func clearCachedToken() {
+    private func clearTokenCaches() {
         cachedToken = nil
         deleteAppKeychainItem()
     }
@@ -153,7 +153,8 @@ class OAuthUsageService {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: appKeychainService,
             kSecAttrAccount as String: appKeychainAccount,
-            kSecValueData as String: data
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         let status = SecItemAdd(query as CFDictionary, nil)
         if status != errSecSuccess {
