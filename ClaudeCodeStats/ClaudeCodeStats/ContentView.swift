@@ -6,6 +6,12 @@ struct ContentView: View {
     @State private var showingSettings = false
     @State private var isSpinning = false
 
+    private static let lastUpdatedTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
     var body: some View {
         if showingSettings {
             SettingsView(isPresented: $showingSettings)
@@ -161,7 +167,7 @@ struct ContentView: View {
 
     private var footerView: some View {
         HStack {
-            TimelineView(.periodic(from: .now, by: 30)) { context in
+            TimelineView(.everyMinute) { context in
                 Text(lastUpdatedString(at: context.date))
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textSecondary)
@@ -278,9 +284,7 @@ struct ContentView: View {
             let minutes = Int(interval / 60)
             return "Updated \(minutes)m ago"
         } else {
-            let formatter = DateFormatter()
-            formatter.timeStyle = .short
-            return "Updated at \(formatter.string(from: lastUpdated))"
+            return "Updated at \(Self.lastUpdatedTimeFormatter.string(from: lastUpdated))"
         }
     }
 }
