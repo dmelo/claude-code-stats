@@ -161,9 +161,11 @@ struct ContentView: View {
 
     private var footerView: some View {
         HStack {
-            Text(lastUpdatedString)
-                .font(.system(size: 10))
-                .foregroundColor(Theme.textSecondary)
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                Text(lastUpdatedString(at: context.date))
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.textSecondary)
+            }
 
             Spacer()
 
@@ -264,12 +266,12 @@ struct ContentView: View {
         .padding(.vertical, 8)
     }
 
-    private var lastUpdatedString: String {
+    private func lastUpdatedString(at now: Date) -> String {
         guard let lastUpdated = viewModel.webUsage?.lastUpdated else {
             return "Not yet updated"
         }
 
-        let interval = Date().timeIntervalSince(lastUpdated)
+        let interval = now.timeIntervalSince(lastUpdated)
         if interval < 60 {
             return "Updated just now"
         } else if interval < 3600 {

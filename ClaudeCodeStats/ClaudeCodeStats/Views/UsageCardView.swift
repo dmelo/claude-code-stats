@@ -5,8 +5,7 @@ struct UsageCardView: View {
     let usage: Double
     let resetsAt: Date
 
-    private var resetTimeString: String {
-        let now = Date()
+    private func resetTimeString(at now: Date) -> String {
         let interval = resetsAt.timeIntervalSince(now)
 
         if interval <= 0 {
@@ -42,9 +41,11 @@ struct UsageCardView: View {
                     .frame(width: 40, alignment: .trailing)
             }
 
-            Text(resetTimeString)
-                .font(.system(size: 11))
-                .foregroundColor(Theme.textSecondary)
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                Text(resetTimeString(at: context.date))
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.textSecondary)
+            }
         }
         .padding(12)
         .background(Theme.cardBackground)
