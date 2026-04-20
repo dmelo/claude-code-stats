@@ -5,8 +5,13 @@ struct UsageCardView: View {
     let usage: Double
     let resetsAt: Date
 
-    private var resetTimeString: String {
-        let now = Date()
+    private static let resetDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE h:mm a"
+        return formatter
+    }()
+
+    private func resetTimeString(at now: Date) -> String {
         let interval = resetsAt.timeIntervalSince(now)
 
         if interval <= 0 {
@@ -17,9 +22,7 @@ struct UsageCardView: View {
         let minutes = (Int(interval) % 3600) / 60
 
         if hours > 24 {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEE h:mm a"
-            return "Resets \(formatter.string(from: resetsAt))"
+            return "Resets \(Self.resetDateFormatter.string(from: resetsAt))"
         } else if hours > 0 {
             return "Resets in \(hours)h \(minutes)m"
         } else {
@@ -42,9 +45,11 @@ struct UsageCardView: View {
                     .frame(width: 40, alignment: .trailing)
             }
 
-            Text(resetTimeString)
-                .font(.system(size: 11))
-                .foregroundColor(Theme.textSecondary)
+            TimelineView(.everyMinute) { context in
+                Text(resetTimeString(at: context.date))
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.textSecondary)
+            }
         }
         .padding(12)
         .background(Theme.cardBackground)
