@@ -14,8 +14,15 @@ class OAuthUsageService {
     private let appKeychainService = "ClaudeCodeStats-credentials"
     private let appKeychainAccount = "oauth-token"
     private var cachedToken: String?
+    private let session: URLSession
 
-    private init() {}
+    private init() {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 60
+        self.session = URLSession(configuration: config)
+    }
 
     var hasCredentials: Bool {
         readAccessToken() != nil
@@ -32,7 +39,6 @@ class OAuthUsageService {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 15
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -47,7 +53,9 @@ class OAuthUsageService {
 
         let (_, response): (Data, URLResponse)
         do {
-            (_, response) = try await URLSession.shared.data(for: request)
+            (_, response) = try await withRetry {
+                try await session.data(for: request)
+            }
         } catch {
             throw UsageError.networkError(error)
         }
@@ -213,5 +221,39 @@ class OAuthUsageService {
             return Date(timeIntervalSince1970: timestamp)
         }
         return nil
+    }
+
+    private func withRetry<T>(
+        maxAttempts: Int = 3,
+        initialDelay: TimeInterval = 0.5,
+        _ operation: () async throws -> T
+    ) async throws -> T {
+        var delay = initialDelay
+        for attempt in 1...maxAttempts {
+            do {
+                return try await operation()
+            } catch let error as URLError where Self.isTransientNetworkError(error) {
+                guard attempt < maxAttempts else { throw error }
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                delay *= 3
+            }
+        }
+        throw URLError(.unknown)
+    }
+
+    private static func isTransientNetworkError(_ error: URLError) -> Bool {
+        switch error.code {
+        case .secureConnectionFailed,
+             .networkConnectionLost,
+             .timedOut,
+             .cannotConnectToHost,
+             .cannotFindHost,
+             .dnsLookupFailed,
+             .notConnectedToInternet,
+             .resourceUnavailable:
+            return true
+        default:
+            return false
+        }
     }
 }
