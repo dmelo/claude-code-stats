@@ -20,7 +20,7 @@ class OAuthUsageService {
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
         config.timeoutIntervalForRequest = 15
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForResource = 20
         self.session = URLSession(configuration: config)
     }
 
@@ -234,7 +234,7 @@ class OAuthUsageService {
                 return try await operation()
             } catch let error as URLError where Self.isTransientNetworkError(error) {
                 guard attempt < maxAttempts else { throw error }
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 delay *= 3
             }
         }
