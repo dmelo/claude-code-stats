@@ -1,10 +1,21 @@
 import Foundation
 
+// A weekly limit scoped to a specific model (e.g. "Fable"), shown alongside
+// the overall session and all-models limits.
+struct ScopedUsageLimit: Identifiable {
+    let name: String
+    let usage: Double
+    let resetsAt: Date
+
+    var id: String { name }
+}
+
 struct WebUsageData {
     let sessionUsage: Double
     let sessionResetsAt: Date
     let weeklyUsage: Double
     let weeklyResetsAt: Date
+    let scopedLimits: [ScopedUsageLimit]
     let lastUpdated: Date
 
     static var empty: WebUsageData {
@@ -13,6 +24,7 @@ struct WebUsageData {
             sessionResetsAt: Date(),
             weeklyUsage: 0,
             weeklyResetsAt: Date(),
+            scopedLimits: [],
             lastUpdated: Date()
         )
     }

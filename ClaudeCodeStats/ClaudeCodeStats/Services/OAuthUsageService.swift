@@ -5,7 +5,7 @@ import Security
 class OAuthUsageService {
     static let shared = OAuthUsageService()
 
-    private let apiURL = "https://api.anthropic.com/v1/messages"
+    private let usageURL = "https://api.anthropic.com/api/oauth/usage"
     private let credentialsPath: String = {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.claude/.credentials.json"
@@ -33,27 +33,19 @@ class OAuthUsageService {
             throw UsageError.noCredentials
         }
 
-        guard let url = URL(string: apiURL) else {
+        guard let url = URL(string: usageURL) else {
             throw UsageError.invalidResponse
         }
 
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = "GET"
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
 
-        let body: [String: Any] = [
-            "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 1,
-            "messages": [["role": "user", "content": "hi"]]
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (_, response): (Data, URLResponse)
+        let (data, response): (Data, URLResponse)
         do {
-            (_, response) = try await withRetry {
+            (data, response) = try await withRetry {
                 try await session.data(for: request)
             }
         } catch {
@@ -69,12 +61,11 @@ class OAuthUsageService {
             throw UsageError.tokenExpired
         }
 
-        // 2xx and 429 both carry valid rate-limit headers
-        guard (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 429 else {
+        guard (200...299).contains(httpResponse.statusCode) else {
             throw UsageError.invalidResponse
         }
 
-        return parseHeaders(httpResponse)
+        return try parseUsage(data)
     }
 
     private func readAccessToken() -> String? {
@@ -192,35 +183,98 @@ class OAuthUsageService {
         return token
     }
 
-    private func parseHeaders(_ response: HTTPURLResponse) -> WebUsageData {
-        let headers = response.allHeaderFields
+    // Shape of the /api/oauth/usage JSON response (only the fields we consume).
+    private struct UsageResponse: Decodable {
+        let fiveHour: Window?
+        let sevenDay: Window?
+        let limits: [Limit]?
 
-        let sessionUtilization = headerDouble(headers, key: "anthropic-ratelimit-unified-5h-utilization")
-        let sessionReset = headerDate(headers, key: "anthropic-ratelimit-unified-5h-reset")
-        let weeklyUtilization = headerDouble(headers, key: "anthropic-ratelimit-unified-7d-utilization")
-        let weeklyReset = headerDate(headers, key: "anthropic-ratelimit-unified-7d-reset")
+        enum CodingKeys: String, CodingKey {
+            case fiveHour = "five_hour"
+            case sevenDay = "seven_day"
+            case limits
+        }
+
+        struct Window: Decodable {
+            let utilization: Double?
+            let resetsAt: String?
+
+            enum CodingKeys: String, CodingKey {
+                case utilization
+                case resetsAt = "resets_at"
+            }
+        }
+
+        struct Limit: Decodable {
+            let kind: String
+            let percent: Double?
+            let resetsAt: String?
+            let scope: Scope?
+
+            enum CodingKeys: String, CodingKey {
+                case kind, percent, scope
+                case resetsAt = "resets_at"
+            }
+
+            struct Scope: Decodable {
+                let model: Model?
+
+                struct Model: Decodable {
+                    let displayName: String?
+
+                    enum CodingKeys: String, CodingKey {
+                        case displayName = "display_name"
+                    }
+                }
+            }
+        }
+    }
+
+    private func parseUsage(_ data: Data) throws -> WebUsageData {
+        guard let decoded = try? JSONDecoder().decode(UsageResponse.self, from: data) else {
+            throw UsageError.invalidResponse
+        }
+
+        // Weekly limits scoped to a specific model (e.g. Fable) live only in the
+        // `limits` array — render each as its own card.
+        let scopedLimits: [ScopedUsageLimit] = (decoded.limits ?? []).compactMap { limit in
+            guard limit.kind == "weekly_scoped",
+                  let name = limit.scope?.model?.displayName, !name.isEmpty else {
+                return nil
+            }
+            return ScopedUsageLimit(
+                name: name,
+                usage: limit.percent ?? 0,
+                resetsAt: parseDate(limit.resetsAt) ?? Date()
+            )
+        }
 
         return WebUsageData(
-            sessionUsage: sessionUtilization * 100,
-            sessionResetsAt: sessionReset ?? Date(),
-            weeklyUsage: weeklyUtilization * 100,
-            weeklyResetsAt: weeklyReset ?? Date(),
+            sessionUsage: decoded.fiveHour?.utilization ?? 0,
+            sessionResetsAt: parseDate(decoded.fiveHour?.resetsAt) ?? Date(),
+            weeklyUsage: decoded.sevenDay?.utilization ?? 0,
+            weeklyResetsAt: parseDate(decoded.sevenDay?.resetsAt) ?? Date(),
+            scopedLimits: scopedLimits,
             lastUpdated: Date()
         )
     }
 
-    private func headerDouble(_ headers: [AnyHashable: Any], key: String) -> Double {
-        if let value = headers[key] as? String, let num = Double(value) {
-            return num
-        }
-        return 0
-    }
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
-    private func headerDate(_ headers: [AnyHashable: Any], key: String) -> Date? {
-        if let value = headers[key] as? String, let timestamp = TimeInterval(value) {
-            return Date(timeIntervalSince1970: timestamp)
-        }
-        return nil
+    private static let isoFormatterNoFraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private func parseDate(_ string: String?) -> Date? {
+        guard let string else { return nil }
+        return Self.isoFormatter.date(from: string)
+            ?? Self.isoFormatterNoFraction.date(from: string)
     }
 
     private func withRetry<T>(
