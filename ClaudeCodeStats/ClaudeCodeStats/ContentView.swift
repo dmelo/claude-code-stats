@@ -119,7 +119,14 @@ struct ContentView: View {
                 resetsAt: usage.weeklyResetsAt
             )
 
-}
+            ForEach(usage.scopedLimits) { limit in
+                UsageCardView(
+                    title: "Weekly Limit (\(limit.name))",
+                    usage: limit.usage,
+                    resetsAt: limit.resetsAt
+                )
+            }
+        }
         .padding(12)
     }
 

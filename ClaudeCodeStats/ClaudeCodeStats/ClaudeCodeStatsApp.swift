@@ -7,9 +7,10 @@ struct ClaudeCodeStatsApp: App {
     @StateObject private var viewModel = UsageViewModel()
     @AppStorage("showSessionInMenuBar") private var showSession = false
     @AppStorage("showWeeklyInMenuBar") private var showWeekly = false
+    @AppStorage("showFableInMenuBar") private var showFable = false
 
     private var showRings: Bool {
-        showSession || showWeekly
+        showSession || showWeekly || showFable
     }
 
     var body: some Scene {
@@ -22,9 +23,12 @@ struct ClaudeCodeStatsApp: App {
                 if showRings {
                     let sessionPct = viewModel.webUsage?.sessionUsage ?? 0
                     let weeklyPct = viewModel.webUsage?.weeklyUsage ?? 0
+                    let fablePct = viewModel.webUsage?.scopedLimits
+                        .first(where: { $0.name == "Fable" })?.usage ?? 0
                     Image(nsImage: renderRings(
                         session: showSession ? sessionPct : nil,
-                        weekly: showWeekly ? weeklyPct : nil
+                        weekly: showWeekly ? weeklyPct : nil,
+                        fable: showFable ? fablePct : nil
                     ))
                 } else {
                     Image(systemName: "chart.bar.fill")
@@ -47,7 +51,7 @@ struct ClaudeCodeStatsApp: App {
         .menuBarExtraStyle(.window)
     }
 
-    private func renderRings(session: Double?, weekly: Double?) -> NSImage {
+    private func renderRings(session: Double?, weekly: Double?, fable: Double?) -> NSImage {
         let height: CGFloat = 18
         let ringSize: CGFloat = 14
         let ringLineWidth: CGFloat = 2.5
@@ -59,16 +63,17 @@ struct ClaudeCodeStatsApp: App {
         var segments: [(String, Double)] = []
         if let session { segments.append(("S", session)) }
         if let weekly { segments.append(("W", weekly)) }
+        if let fable { segments.append(("F", fable)) }
 
         // Measure total width
-        let separatorWidth: CGFloat = segments.count > 1
-            ? (" | " as NSString).size(withAttributes: textAttrs).width : 0
+        let separatorWidth: CGFloat = (" | " as NSString).size(withAttributes: textAttrs).width
         var totalWidth: CGFloat = 0
         for (label, _) in segments {
             let labelSize = (label as NSString).size(withAttributes: textAttrs)
             totalWidth += labelSize.width + 2 + ringSize  // label + gap + ring
         }
-        totalWidth += separatorWidth
+        // One separator between each pair of segments (count - 1 total)
+        totalWidth += separatorWidth * CGFloat(max(0, segments.count - 1))
 
         let image = NSImage(size: NSSize(width: totalWidth, height: height), flipped: false) { _ in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }

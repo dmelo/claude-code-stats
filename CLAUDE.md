@@ -30,7 +30,7 @@ There are no tests or linters configured.
 - **App entry point**: `ClaudeCodeStatsApp.swift` — `MenuBarExtra` with chart icon, red dot badge overlay for updates
 - **Main view**: `ContentView.swift` — contains the `UsageViewModel` (handles usage data + status polling) and all view components
 - **Services** (singletons, async/await):
-  - `OAuthUsageService` — fetches usage data from Anthropic API using OAuth credentials (reads `~/.claude/.credentials.json` first, falls back to macOS Keychain `Claude Code-credentials`), parsing rate limit response headers
+  - `OAuthUsageService` — fetches usage data from the Anthropic `GET /api/oauth/usage` endpoint using OAuth credentials (reads `~/.claude/.credentials.json` first, falls back to macOS Keychain `Claude Code-credentials`), decoding session, weekly all-models, and per-model scoped weekly limits (e.g. Fable) from the JSON `limits` array
   - `StatusService` — fetches health status from status.claude.com
   - `VersionService` — checks installed CLI version (`claude --version` via Process) and latest release from GitHub API; includes `UpdateChecker` ObservableObject for state management
 

@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Binding var isPresented: Bool
     @AppStorage("showSessionInMenuBar") private var showSession = false
     @AppStorage("showWeeklyInMenuBar") private var showWeekly = false
+    @AppStorage("showFableInMenuBar") private var showFable = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,6 +90,12 @@ struct SettingsView: View {
                 .controlSize(.mini)
 
             Toggle("Show weekly usage", isOn: $showWeekly)
+                .font(.system(size: 11))
+                .foregroundColor(Theme.textSecondary)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+
+            Toggle("Show Fable usage", isOn: $showFable)
                 .font(.system(size: 11))
                 .foregroundColor(Theme.textSecondary)
                 .toggleStyle(.switch)
