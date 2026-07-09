@@ -41,13 +41,15 @@ class UsageViewModel: ObservableObject {
 
     func refresh() async {
         isLoading = true
-        error = nil
 
         do {
             let usage = try await OAuthUsageService.shared.fetchUsage()
             webUsage = usage
+            error = nil
             UsageHistoryService.shared.record(usage)
         } catch {
+            // Keep the last good data on screen. When webUsage exists, ContentView
+            // shows a subtle banner instead of replacing everything with an error.
             self.error = error.localizedDescription
         }
 

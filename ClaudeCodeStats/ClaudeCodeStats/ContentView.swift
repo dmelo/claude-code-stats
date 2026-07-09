@@ -75,11 +75,15 @@ struct ContentView: View {
             Divider()
                 .background(Theme.divider)
 
-            // Content
-            if let error = viewModel.error {
-                errorView(error)
-            } else if let usage = viewModel.webUsage {
+            // Content — data-first: a transient refresh failure shows a subtle
+            // banner above the last known usage rather than wiping it.
+            if let usage = viewModel.webUsage {
+                if let error = viewModel.error {
+                    staleBanner(error)
+                }
                 usageView(usage)
+            } else if let error = viewModel.error {
+                errorView(error)
             } else {
                 loadingView
             }
@@ -140,6 +144,23 @@ struct ContentView: View {
         }
         .frame(height: 150)
         .padding(12)
+    }
+
+    private func staleBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 10))
+                .foregroundColor(.orange)
+
+            Text(message)
+                .font(.system(size: 10))
+                .foregroundColor(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
     }
 
     private func errorView(_ error: String) -> some View {
