@@ -99,8 +99,12 @@ class OAuthUsageService {
             return cached.token
         }
 
-        // Live file source (present on some setups), authoritative when readable.
-        if let cred = readCredentialFromFile(), cred.isUsable {
+        // Live file source (present on some setups). Authoritative and cheap to
+        // read with no prompt, so use it whenever readable — the isUsable gate is
+        // only for caches, which we skip in order to fall through to a live source
+        // like this one. Gating it here could bypass a valid near-expiry file token
+        // for a staler cache, a keychain prompt, or a false "no credentials".
+        if let cred = readCredentialFromFile() {
             cachedCredential = cred
             return cred.token
         }
