@@ -40,18 +40,33 @@ class UsageViewModel: ObservableObject {
     }
 
     func refresh() async {
+        // Single-flight: skip if a refresh is already running. refresh() is async
+        // on the MainActor, so it can be re-entered across an await (e.g. the
+        // auto-timer racing a manual tap, or the launch init racing the rings
+        // toggle). Overlapping fetches waste the endpoint's tight rate-limit
+        // budget and let a slower response clobber a newer one. defer guarantees
+        // isLoading is cleared on every exit, including cancellation.
+        guard !isLoading else { return }
         isLoading = true
-        error = nil
+        defer { isLoading = false }
+
+        // With no data to fall back on, clear a prior error so a retry shows the
+        // loading state instead of freezing on the old error. When data exists we
+        // keep the error so the stale banner stays put during the retry.
+        if webUsage == nil {
+            error = nil
+        }
 
         do {
             let usage = try await OAuthUsageService.shared.fetchUsage()
             webUsage = usage
+            error = nil
             UsageHistoryService.shared.record(usage)
         } catch {
+            // Keep the last good data on screen. When webUsage exists, ContentView
+            // shows a subtle banner instead of replacing everything with an error.
             self.error = error.localizedDescription
         }
-
-        isLoading = false
 
         // Also refresh status
         await refreshStatus()

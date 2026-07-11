@@ -13,8 +13,26 @@ class OAuthUsageService {
     private let keychainService = "Claude Code-credentials"
     private let appKeychainService = "ClaudeCodeStats-credentials"
     private let appKeychainAccount = "oauth-token"
-    private var cachedToken: String?
+    private var cachedCredential: Credential?
     private let session: URLSession
+
+    // An OAuth access token plus the expiry the CLI recorded for it. Tracking
+    // expiry lets us notice when the CLI has rotated the token and re-read the
+    // live source instead of clinging to a stale cached copy.
+    private struct Credential {
+        let token: String
+        let expiresAt: Date?
+
+        // Treat a token as usable until shortly before it expires, so we never
+        // send one that's about to lapse (a rotated-away token returns 429, not
+        // 401, so we can't rely on a failed request to tell us it's stale). The
+        // 5-minute cushion absorbs clock skew between us and the server.
+        // Unknown expiry = usable.
+        var isUsable: Bool {
+            guard let expiresAt else { return true }
+            return expiresAt.timeIntervalSinceNow > 300
+        }
+    }
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -61,6 +79,13 @@ class OAuthUsageService {
             throw UsageError.tokenExpired
         }
 
+        // The usage endpoint has its own rate limit (HTTP 429 with a long
+        // retry-after and no usage body). Surface it distinctly so the UI keeps
+        // showing the last known data and recovers on the next scheduled poll.
+        if httpResponse.statusCode == 429 {
+            throw UsageError.rateLimited
+        }
+
         guard (200...299).contains(httpResponse.statusCode) else {
             throw UsageError.invalidResponse
         }
@@ -69,40 +94,58 @@ class OAuthUsageService {
     }
 
     private func readAccessToken() -> String? {
-        if let token = cachedToken {
-            return token
+        // In-memory cache, but only while the token is still fresh.
+        if let cached = cachedCredential, cached.isUsable {
+            return cached.token
         }
-        if let token = readTokenFromFile() {
-            cachedToken = token
-            return token
+
+        // Live file source (present on some setups). Authoritative and cheap to
+        // read with no prompt, so use it whenever readable — the isUsable gate is
+        // only for caches, which we skip in order to fall through to a live source
+        // like this one. Gating it here could bypass a valid near-expiry file token
+        // for a staler cache, a keychain prompt, or a false "no credentials".
+        if let cred = readCredentialFromFile() {
+            cachedCredential = cred
+            return cred.token
         }
-        if let token = readTokenFromAppKeychain() {
-            cachedToken = token
-            return token
+
+        // App-owned keychain cache — avoids repeated permission prompts on the
+        // CLI's item. Trust it only while unexpired; a token that has rotated out
+        // is skipped so we fall through and re-read the live source below.
+        if let cred = readCredentialFromAppKeychain(), cred.isUsable {
+            cachedCredential = cred
+            return cred.token
         }
-        if let token = readTokenFromKeychain(service: keychainService) {
-            saveTokenToAppKeychain(token)
-            cachedToken = token
-            return token
+
+        // Live keychain source owned by the Claude Code CLI. Re-reading here is
+        // what picks up a token the CLI has rotated; cache the result (in the new
+        // format, with expiry) so we don't prompt on every fetch.
+        if let cred = readCredentialFromKeychain(service: keychainService) {
+            saveCredentialToAppKeychain(cred)
+            cachedCredential = cred
+            return cred.token
         }
+
         return nil
     }
 
     private func clearTokenCaches() {
-        cachedToken = nil
+        cachedCredential = nil
         deleteAppKeychainItem()
     }
 
-    private func readTokenFromFile() -> String? {
-        guard let data = FileManager.default.contents(atPath: credentialsPath),
-              let token = extractToken(from: data) else {
+    private func readCredentialFromFile() -> Credential? {
+        guard let data = FileManager.default.contents(atPath: credentialsPath) else {
             return nil
         }
-        return token
+        return extractCredential(from: data)
     }
 
-    // App keychain stores the raw token string, not the JSON credential blob
-    private func readTokenFromAppKeychain() -> String? {
+    // The app keychain stores our own {accessToken, expiresAt} JSON so we can
+    // tell when a cached token has rotated out. A value written by an older build
+    // (a bare token string) won't parse and is treated as absent — so the app
+    // transparently re-reads the live source and re-caches in the new format.
+    private func readCredentialFromAppKeychain() -> Credential? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: appKeychainService,
@@ -114,16 +157,13 @@ class OAuthUsageService {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let token = String(data: data, encoding: .utf8),
-              !token.isEmpty else {
+        guard status == errSecSuccess, let data = result as? Data else {
             return nil
         }
-        return token
+        return decodeCachedCredential(from: data)
     }
 
-    private func readTokenFromKeychain(service: String) -> String? {
+    private func readCredentialFromKeychain(service: String) -> Credential? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -134,16 +174,18 @@ class OAuthUsageService {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let token = extractToken(from: data) else {
+        guard status == errSecSuccess, let data = result as? Data else {
             return nil
         }
-        return token
+        return extractCredential(from: data)
     }
 
-    private func saveTokenToAppKeychain(_ token: String) {
-        guard let data = token.data(using: .utf8) else { return }
+    private func saveCredentialToAppKeychain(_ credential: Credential) {
+        var payload: [String: Any] = ["accessToken": credential.token]
+        if let expiresAt = credential.expiresAt {
+            payload["expiresAt"] = expiresAt.timeIntervalSince1970
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
 
         // Delete existing item first (if any)
         deleteAppKeychainItem()
@@ -157,7 +199,7 @@ class OAuthUsageService {
         ]
         let status = SecItemAdd(query as CFDictionary, nil)
         if status != errSecSuccess {
-            NSLog("OAuthUsageService: Failed to cache token in app keychain (status: \(status))")
+            NSLog("OAuthUsageService: Failed to cache credential in app keychain (status: \(status))")
         }
     }
 
@@ -173,14 +215,29 @@ class OAuthUsageService {
         }
     }
 
-    private func extractToken(from data: Data) -> String? {
+    // Parses the {accessToken, expiresAt} JSON this app writes to its own keychain.
+    private func decodeCachedCredential(from data: Data) -> Credential? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let token = json["accessToken"] as? String, !token.isEmpty else {
+            return nil
+        }
+        let expiresAt = (json["expiresAt"] as? NSNumber)
+            .map { Date(timeIntervalSince1970: $0.doubleValue) }
+        return Credential(token: token, expiresAt: expiresAt)
+    }
+
+    // Parses the Claude Code credential blob (claudeAiOauth.accessToken/expiresAt).
+    private func extractCredential(from data: Data) -> Credential? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let oauth = json["claudeAiOauth"] as? [String: Any],
               let token = oauth["accessToken"] as? String,
               !token.isEmpty else {
             return nil
         }
-        return token
+        // expiresAt is epoch milliseconds.
+        let expiresAt = (oauth["expiresAt"] as? NSNumber)
+            .map { Date(timeIntervalSince1970: $0.doubleValue / 1000) }
+        return Credential(token: token, expiresAt: expiresAt)
     }
 
     // Shape of the /api/oauth/usage JSON response (only the fields we consume).

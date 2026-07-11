@@ -35,6 +35,7 @@ enum UsageError: Error, LocalizedError {
     case networkError(Error)
     case invalidResponse
     case tokenExpired
+    case rateLimited
 
     var errorDescription: String? {
         switch self {
@@ -46,6 +47,8 @@ enum UsageError: Error, LocalizedError {
             return "Invalid response from API."
         case .tokenExpired:
             return "OAuth token expired. Run 'claude' to re-authenticate."
+        case .rateLimited:
+            return "Usage data is temporarily rate-limited. Try again in a few minutes."
         }
     }
 }
