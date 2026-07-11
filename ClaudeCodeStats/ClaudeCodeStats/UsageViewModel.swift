@@ -41,6 +41,12 @@ class UsageViewModel: ObservableObject {
 
     func refresh() async {
         isLoading = true
+        // With no data to fall back on, clear a prior error so a retry shows the
+        // loading state instead of freezing on the old error. When data exists we
+        // keep the error so the stale banner stays put during the retry.
+        if webUsage == nil {
+            error = nil
+        }
 
         do {
             let usage = try await OAuthUsageService.shared.fetchUsage()
