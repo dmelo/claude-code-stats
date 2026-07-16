@@ -31,6 +31,7 @@ There are no tests or linters configured.
 - **Main view**: `ContentView.swift` — contains the `UsageViewModel` (handles usage data + status polling) and all view components
 - **Services** (singletons, async/await):
   - `OAuthUsageService` — fetches usage data from the Anthropic `GET /api/oauth/usage` endpoint using OAuth credentials (reads `~/.claude/.credentials.json` first, falls back to macOS Keychain `Claude Code-credentials`), decoding session, weekly all-models, and per-model scoped weekly limits (e.g. Fable) from the JSON `limits` array
+  - `CostService` — computes API-equivalent spend by scanning the Claude Code transcripts in `~/.claude/projects/**/*.jsonl`. An `actor`, not a `@MainActor` singleton: a cold scan reads ~1 GB. Caches per-day rollups in Application Support and resumes from a per-file byte offset, so refreshes are incremental (~1s vs ~17s cold). Any change to its price table, cost formula, or parsing **must** bump `cacheVersion` — costs are priced once at scan time and offsets advance regardless, so otherwise the change is silently ignored
   - `StatusService` — fetches health status from status.claude.com
   - `VersionService` — checks installed CLI version (`claude --version` via Process) and latest release from GitHub API; includes `UpdateChecker` ObservableObject for state management
 

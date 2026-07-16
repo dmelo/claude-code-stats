@@ -130,6 +130,12 @@ struct ContentView: View {
                     resetsAt: limit.resetsAt
                 )
             }
+
+            // Absent only until the first transcript scan finishes. The limits
+            // above come from the API and shouldn't wait on it.
+            if let spend = viewModel.spend {
+                SpendCardView(spend: spend)
+            }
         }
         .padding(12)
     }

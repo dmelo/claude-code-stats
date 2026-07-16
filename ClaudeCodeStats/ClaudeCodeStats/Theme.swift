@@ -32,6 +32,15 @@ enum Theme {
             : NSColor(red: 224/255, green: 224/255, blue: 224/255, alpha: 1)
     }))
 
+    // Chart marks. Each mode gets its own step rather than one colour reused on
+    // both surfaces: a single blue can't sit inside the readable lightness band
+    // against white and against #2A2A2A at once.
+    static let chartBar = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 59/255, green: 130/255, blue: 246/255, alpha: 1)
+            : NSColor(red: 37/255, green: 99/255, blue: 235/255, alpha: 1)
+    }))
+
     static let inputBackground = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor(red: 35/255, green: 35/255, blue: 35/255, alpha: 1)
