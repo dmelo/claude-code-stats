@@ -1,6 +1,36 @@
 import SwiftUI
 import AppKit
 
+/// Which appearance the popover renders in.
+///
+/// Applies to the popover's contents only — never to `NSApp.appearance`. The
+/// menu bar icon draws with `NSColor.labelColor` against the real menu bar, so
+/// forcing the app light while the system is dark would paint it black on black.
+enum AppearancePreference: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: return "Auto"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    /// nil follows the system.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 enum Theme {
     static let background = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
