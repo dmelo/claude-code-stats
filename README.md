@@ -9,11 +9,12 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 - **Real-time usage data** - Shows your actual usage from Anthropic's servers
 - **Current Session** - 5-hour rolling window usage with reset countdown
 - **Weekly Limits** - All models combined usage with reset time
+- **API-equivalent spend** - What your token usage would have cost at API rates: today, the last 7 days, and month to date, with a per-model breakdown and a 30-day chart you can hover for any day's figure. Read from Claude Code's own transcripts on disk, so it needs no extra tooling and makes no network calls
 - **Auto-refresh** - Updates every 5 minutes automatically
 - **Claude service status** - Live status from [status.claude.com](https://status.claude.com) shown in the footer (Operational, Degraded, Outage, Critical)
 - **Version update detection** - Checks for new Claude Code releases hourly via GitHub; shows a red dot badge on the menu bar icon and a banner when an update is available, with a link to the changelog
 - **Native macOS app** - Built with SwiftUI, lightweight and fast
-- **Light/dark theme** - Adapts to macOS appearance
+- **Light/dark theme** - Follows macOS appearance, or pin it to Light or Dark in Settings
 
 ## Requirements
 
