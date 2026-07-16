@@ -11,24 +11,27 @@ private struct Rate {
 private struct ModelPrice {
     let display: String
     let standard: Rate
-    /// A promotional rate and the instant it lapses. Entries are priced at the
-    /// rate in effect on the day they ran, so a past entry keeps the promotional
-    /// rate after it expires and later ones fall back to `standard` on their own.
-    let intro: (rate: Rate, through: Date)?
+    /// A promotional rate and the first instant it no longer applies —
+    /// exclusive, so the bound is the midnight *after* the last promotional day.
+    /// Entries are priced at the rate in effect on the day they ran, so a past
+    /// entry keeps the promotional rate once it lapses and later ones fall back
+    /// to `standard` on their own.
+    let intro: (rate: Rate, until: Date)?
 
-    init(display: String, standard: Rate, intro: (rate: Rate, through: Date)? = nil) {
+    init(display: String, standard: Rate, intro: (rate: Rate, until: Date)? = nil) {
         self.display = display
         self.standard = standard
         self.intro = intro
     }
 
     func rate(on date: Date) -> Rate {
-        if let intro, date <= intro.through { return intro.rate }
+        if let intro, date < intro.until { return intro.rate }
         return standard
     }
 }
 
-/// Sonnet 5's introductory pricing runs through 2026-08-31.
+/// Sonnet 5's introductory pricing runs through 2026-08-31, so the standard rate
+/// takes over at the following midnight.
 private let sonnet5IntroEnds: Date = {
     var components = DateComponents()
     components.year = 2026
@@ -82,7 +85,7 @@ private let chartWindowDays = 30
 /// transcript's offset whether or not its entries parsed — so without a bump,
 /// repricing is ignored and a parsing fix never sees the bytes it was meant to
 /// handle.
-private let cacheVersion = 4
+private let cacheVersion = 5
 
 private struct EntryCost: Codable {
     let model: String
@@ -247,7 +250,12 @@ actor CostService {
         // always is. Counting every copy instead would overstate spend roughly
         // threefold; keeping whichever copy happened to be read first would
         // understate output tokens by about a third and vary with scan order.
-        let id = message["id"] as? String ?? ""
+        // An entry with no id can't be recognised as a repeat of one already
+        // counted, and repeats are the norm rather than the exception here — so
+        // counting an unidentifiable entry risks inflating it severalfold, while
+        // dropping it costs at most that one entry. Every assistant entry on
+        // record carries an id; requestId is the near-universal tiebreak.
+        guard let id = message["id"] as? String, !id.isEmpty else { return }
         let requestID = object["requestId"] as? String ?? ""
         let key = entryHash("\(id):\(requestID)")
 
@@ -292,6 +300,13 @@ actor CostService {
 
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
+        // Pinned, per Apple's guidance for fixed-format dates: left alone, the
+        // formatter inherits the user's calendar, and "yyyy" under a Buddhist or
+        // Japanese one renders 2026 as 2569 or 0008 — day keys would stop
+        // matching the ones Calendar.current is compared against. The time zone
+        // stays on the system's, since a day here means the user's local day.
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
