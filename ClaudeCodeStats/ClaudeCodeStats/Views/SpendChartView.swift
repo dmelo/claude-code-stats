@@ -11,10 +11,12 @@ struct SpendChartView: View {
 
     @State private var hovered: DailySpend?
 
-    /// The scale picks tick values from the data, so on a quiet month every tick
-    /// can land under a dollar. Truncating those to whole dollars labels the
-    /// whole axis "$0"; truncating thousands loses the difference between $1.1k
-    /// and $1.9k. Each magnitude gets only the precision it needs.
+    /// The scale picks tick values from the data, so on a quiet month the ticks
+    /// land wherever the peak puts them — under a dollar, or on fractions like
+    /// 1.5. Rounding those to whole dollars both mislabels them and can print
+    /// the same label twice ("$2" for 1.5 and 2.0); truncating thousands loses
+    /// the difference between $1.1k and $1.9k. So cents are dropped only from
+    /// values that genuinely have none.
     private static func axisLabel(_ amount: Double) -> String {
         if amount >= 1000 {
             let thousands = amount / 1000
@@ -22,8 +24,8 @@ struct SpendChartView: View {
                 ? "$\(Int(thousands))k"
                 : String(format: "$%.1fk", thousands)
         }
-        if amount == 0 || amount >= 1 {
-            return "$\(Int(amount.rounded()))"
+        if amount == amount.rounded() {
+            return "$\(Int(amount))"
         }
         return String(format: "$%.2f", amount)
     }
