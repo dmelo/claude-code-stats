@@ -85,7 +85,10 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Theme.textPrimary)
 
-            Picker("", selection: $appearance) {
+            // Named for VoiceOver even though the heading above already says it
+            // visually — labelsHidden() only suppresses the on-screen label, so
+            // an empty string would leave the control unannounced.
+            Picker("Appearance", selection: $appearance) {
                 ForEach(AppearancePreference.allCases) { option in
                     Text(option.label).tag(option)
                 }

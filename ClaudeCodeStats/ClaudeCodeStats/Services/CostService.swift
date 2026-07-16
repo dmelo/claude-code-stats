@@ -135,6 +135,11 @@ actor CostService {
     /// two copies land in different days and neither can supersede the other.
     /// Derived from `cache`, so it is rebuilt on load rather than persisted.
     private var entryDay: [String: String] = [:]
+    /// Whether `cache` has changed since it was last written. Most refreshes
+    /// find nothing new — transcripts are resumed from their byte offsets and
+    /// read zero bytes — and rewriting the whole cache anyway costs an atomic
+    /// multi-megabyte write every few minutes for no benefit.
+    private var isDirty = false
 
     private init() {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -155,7 +160,11 @@ actor CostService {
             scan(path: path)
         }
         prune()
-        persist()
+        // Most refreshes find nothing new, and the cache is rewritten whole.
+        if isDirty {
+            persist()
+            isDirty = false
+        }
         return summarize()
     }
 
@@ -202,6 +211,7 @@ actor CostService {
             ingest(line: line)
         }
         cache.offsets[path] = offset + UInt64(complete.count)
+        isDirty = true
     }
 
     private static let assistantMarker = Data("\"assistant\"".utf8)
@@ -267,6 +277,7 @@ actor CostService {
         rollup.entries[key] = EntryCost(model: modelPrice.display, cost: cost)
         cache.days[day] = rollup
         entryDay[key] = day
+        isDirty = true
     }
 
     /// Reads only the top-level usage counters. The sibling `iterations` array
@@ -373,10 +384,13 @@ actor CostService {
             guard let date = Self.dayFormatter.date(from: day), date < cutoff else { continue }
             for key in rollup.entries.keys { entryDay[key] = nil }
             cache.days[day] = nil
+            isDirty = true
         }
         // Transcripts Claude Code has since deleted would otherwise keep their
         // offsets forever.
+        let offsetsBefore = cache.offsets.count
         cache.offsets = cache.offsets.filter { fileManager.fileExists(atPath: $0.key) }
+        if cache.offsets.count != offsetsBefore { isDirty = true }
     }
 
     private func persist() {
