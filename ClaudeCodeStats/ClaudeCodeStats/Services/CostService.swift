@@ -161,9 +161,10 @@ actor CostService {
         }
         prune()
         // Most refreshes find nothing new, and the cache is rewritten whole.
+        // Stays dirty if the write fails, so the next refresh retries it instead
+        // of dropping this session's work on the floor.
         if isDirty {
-            persist()
-            isDirty = false
+            isDirty = !persist()
         }
         return summarize()
     }
@@ -179,6 +180,12 @@ actor CostService {
             roots = ["\(home)/.claude", "\(home)/.config/claude"]
         }
 
+        // Sorted because `ingest` pins an entry's day the first time it sees it,
+        // and the enumerator's order isn't guaranteed. An entry whose copies
+        // straddle local midnight could otherwise be filed under either day
+        // depending on which transcript happened to be read first — a decision
+        // the cache then keeps. Copies can be minutes apart, so the window is
+        // real even though no entry currently spans two days.
         return roots.flatMap { root -> [String] in
             let projects = "\(root)/projects"
             guard let walker = fileManager.enumerator(atPath: projects) else { return [] }
@@ -187,6 +194,7 @@ actor CostService {
                 return "\(projects)/\(name)"
             }
         }
+        .sorted()
     }
 
     private func scan(path: String) {
@@ -393,12 +401,16 @@ actor CostService {
         if cache.offsets.count != offsetsBefore { isDirty = true }
     }
 
-    private func persist() {
+    /// Returns whether the cache reached disk, so the caller can keep it dirty
+    /// and retry rather than assume a swallowed failure was a success.
+    private func persist() -> Bool {
         do {
             try JSONEncoder().encode(cache).write(to: storageURL, options: .atomic)
+            return true
         } catch {
             // Non-critical: a failed write only costs a re-scan next launch.
             print("CostService: failed to write cache: \(error)")
+            return false
         }
     }
 }
