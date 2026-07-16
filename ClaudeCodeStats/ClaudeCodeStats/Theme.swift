@@ -31,6 +31,28 @@ enum AppearancePreference: String, CaseIterable, Identifiable {
     }
 }
 
+extension View {
+    /// Applies an appearance override to this subtree.
+    ///
+    /// Both modifiers are needed, and they cover different layers.
+    /// `preferredColorScheme` reaches the hosting window, which is what native
+    /// controls (pickers, toggles) follow. Inside a MenuBarExtra the window's
+    /// appearance is *not* fed back down as an environment value, so the
+    /// `Theme` colours — `NSColor(dynamicProvider:)`, resolved against
+    /// `\.colorScheme` — keep rendering in the system's scheme unless the
+    /// environment is set explicitly too. With only the former, the popover
+    /// renders native controls light over dark cards.
+    @ViewBuilder
+    func appearanceOverride(_ preference: AppearancePreference) -> some View {
+        if let scheme = preference.colorScheme {
+            self.environment(\.colorScheme, scheme)
+                .preferredColorScheme(scheme)
+        } else {
+            self
+        }
+    }
+}
+
 enum Theme {
     static let background = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

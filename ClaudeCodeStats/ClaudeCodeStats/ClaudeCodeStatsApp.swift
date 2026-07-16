@@ -21,7 +21,7 @@ struct ClaudeCodeStatsApp: App {
             ContentView()
                 .environmentObject(updateChecker)
                 .environmentObject(viewModel)
-                .preferredColorScheme(appearance.colorScheme)
+                .appearanceOverride(appearance)
         } label: {
             ZStack(alignment: .topTrailing) {
                 if showRings {
