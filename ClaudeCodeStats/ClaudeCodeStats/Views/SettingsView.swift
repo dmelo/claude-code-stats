@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage("showSessionInMenuBar") private var showSession = false
     @AppStorage("showWeeklyInMenuBar") private var showWeekly = false
     @AppStorage("showFableInMenuBar") private var showFable = false
+    @AppStorage("appearancePreference") private var appearance: AppearancePreference = .system
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,6 +17,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     authStatusSection
+                    appearanceSection
                     menuBarDisplaySection
                     versionRow
                 }
@@ -71,6 +73,33 @@ struct SettingsView: View {
                     .background(Theme.inputBackground)
                     .cornerRadius(6)
             }
+        }
+        .padding(12)
+        .background(Theme.cardBackground)
+        .cornerRadius(8)
+    }
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Appearance")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Theme.textPrimary)
+
+            // Named for VoiceOver even though the heading above already says it
+            // visually — labelsHidden() only suppresses the on-screen label, so
+            // an empty string would leave the control unannounced.
+            Picker("Appearance", selection: $appearance) {
+                ForEach(AppearancePreference.allCases) { option in
+                    Text(option.label).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+
+            Text("Auto follows the system setting.")
+                .font(.system(size: 10))
+                .foregroundColor(Theme.textSecondary)
         }
         .padding(12)
         .background(Theme.cardBackground)

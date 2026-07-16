@@ -1,6 +1,58 @@
 import SwiftUI
 import AppKit
 
+/// Which appearance the popover renders in.
+///
+/// Applies to the popover's contents only — never to `NSApp.appearance`. The
+/// menu bar icon draws with `NSColor.labelColor` against the real menu bar, so
+/// forcing the app light while the system is dark would paint it black on black.
+enum AppearancePreference: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: return "Auto"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    /// nil follows the system.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
+extension View {
+    /// Applies an appearance override to this subtree.
+    ///
+    /// Both modifiers are needed, and they cover different layers.
+    /// `preferredColorScheme` reaches the hosting window, which is what native
+    /// controls (pickers, toggles) follow. Inside a MenuBarExtra the window's
+    /// appearance is *not* fed back down as an environment value, so the
+    /// `Theme` colours — `NSColor(dynamicProvider:)`, resolved against
+    /// `\.colorScheme` — keep rendering in the system's scheme unless the
+    /// environment is set explicitly too. With only the former, the popover
+    /// renders native controls light over dark cards.
+    @ViewBuilder
+    func appearanceOverride(_ preference: AppearancePreference) -> some View {
+        if let scheme = preference.colorScheme {
+            self.environment(\.colorScheme, scheme)
+                .preferredColorScheme(scheme)
+        } else {
+            self
+        }
+    }
+}
+
 enum Theme {
     static let background = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
@@ -30,6 +82,15 @@ enum Theme {
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor(red: 58/255, green: 58/255, blue: 58/255, alpha: 1)
             : NSColor(red: 224/255, green: 224/255, blue: 224/255, alpha: 1)
+    }))
+
+    // Chart marks. Each mode gets its own step rather than one colour reused on
+    // both surfaces: a single blue can't sit inside the readable lightness band
+    // against white and against #2A2A2A at once.
+    static let chartBar = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 59/255, green: 130/255, blue: 246/255, alpha: 1)
+            : NSColor(red: 37/255, green: 99/255, blue: 235/255, alpha: 1)
     }))
 
     static let inputBackground = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in

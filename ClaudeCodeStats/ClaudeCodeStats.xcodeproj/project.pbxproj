@@ -20,6 +20,9 @@
 		A16 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B18 /* UpdateChecker.swift */; };
 		A17 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19 /* Models.swift */; };
 		A18 /* UsageHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20 /* UsageHistoryService.swift */; };
+		A19 /* CostService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21 /* CostService.swift */; };
+		A20 /* SpendCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22 /* SpendCardView.swift */; };
+		A21 /* SpendChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B23 /* SpendChartView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +41,9 @@
 		B18 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		B19 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B20 /* UsageHistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageHistoryService.swift; sourceTree = "<group>"; };
+		B21 /* CostService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostService.swift; sourceTree = "<group>"; };
+		B22 /* SpendCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendCardView.swift; sourceTree = "<group>"; };
+		B23 /* SpendChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendChartView.swift; sourceTree = "<group>"; };
 		P01 /* ClaudeCodeStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeCodeStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -80,6 +86,7 @@
 		G04 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B21 /* CostService.swift */,
 				B14 /* StatusService.swift */,
 				B20 /* UsageHistoryService.swift */,
 				B15 /* VersionService.swift */,
@@ -94,6 +101,8 @@
 				B06 /* ProgressBarView.swift */,
 				B07 /* UsageCardView.swift */,
 				B13 /* SettingsView.swift */,
+				B22 /* SpendCardView.swift */,
+				B23 /* SpendChartView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -187,6 +196,9 @@
 				A16 /* UpdateChecker.swift in Sources */,
 				A17 /* Models.swift in Sources */,
 				A18 /* UsageHistoryService.swift in Sources */,
+				A19 /* CostService.swift in Sources */,
+				A20 /* SpendCardView.swift in Sources */,
+				A21 /* SpendChartView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

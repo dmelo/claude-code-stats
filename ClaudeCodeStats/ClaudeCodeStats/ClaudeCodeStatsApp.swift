@@ -8,6 +8,7 @@ struct ClaudeCodeStatsApp: App {
     @AppStorage("showSessionInMenuBar") private var showSession = false
     @AppStorage("showWeeklyInMenuBar") private var showWeekly = false
     @AppStorage("showFableInMenuBar") private var showFable = false
+    @AppStorage("appearancePreference") private var appearance: AppearancePreference = .system
 
     private var showRings: Bool {
         showSession || showWeekly || showFable
@@ -15,9 +16,12 @@ struct ClaudeCodeStatsApp: App {
 
     var body: some Scene {
         MenuBarExtra {
+            // Scoped to the popover's contents. The label below is deliberately
+            // left out so the menu bar icon keeps following the system.
             ContentView()
                 .environmentObject(updateChecker)
                 .environmentObject(viewModel)
+                .appearanceOverride(appearance)
         } label: {
             ZStack(alignment: .topTrailing) {
                 if showRings {

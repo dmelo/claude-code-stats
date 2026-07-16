@@ -10,6 +10,9 @@ class UsageViewModel: ObservableObject {
     @Published var claudeStatus: ClaudeStatus?
     @Published var isStatusLoading = false
 
+    // API-equivalent spend, computed from the local transcripts
+    @Published var spend: SpendData?
+
     private var refreshTimer: Timer?
 
     var backgroundRefreshEnabled: Bool = false {
@@ -70,6 +73,14 @@ class UsageViewModel: ObservableObject {
 
         // Also refresh status
         await refreshStatus()
+        await refreshSpend()
+    }
+
+    // Spend reads the local transcripts, so it has no bearing on the usage
+    // endpoint's rate limit and is safe to recompute on every refresh. The scan
+    // is incremental after the first one.
+    func refreshSpend() async {
+        spend = await CostService.shared.fetchSpend()
     }
 
     func refreshStatus() async {
