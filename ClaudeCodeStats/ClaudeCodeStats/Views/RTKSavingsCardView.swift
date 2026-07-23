@@ -84,7 +84,7 @@ struct RTKSavingsCardView: View {
 
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Theme.chartBar)
-                        .frame(width: max(0, geometry.size.width * savings.reduction), height: 6)
+                        .frame(width: max(0, geometry.size.width * CGFloat(savings.reduction)), height: 6)
                 }
             }
             .frame(height: 6)
