@@ -93,12 +93,15 @@ class UsageViewModel: ObservableObject {
     // otherwise the last-good value is kept on a nil fetch so a transient db lock
     // doesn't blink the card away. It first appears once RTK has logged a command.
     func refreshRTKSavings() async {
-        guard await RTKSavingsService.shared.isInstalled else {
-            rtkSavings = nil
-            return
-        }
         if let latest = await RTKSavingsService.shared.fetch() {
             rtkSavings = latest
+        } else if !(await RTKSavingsService.shared.isInstalled) {
+            // fetch() returned nil: clear the card only when RTK is actually gone.
+            // Re-checking install state *after* the fetch (rather than gating
+            // before it) closes the window where RTK is removed between the check
+            // and the fetch; a nil while still installed is a transient read
+            // failure, so the last-good value stays put.
+            rtkSavings = nil
         }
     }
 
