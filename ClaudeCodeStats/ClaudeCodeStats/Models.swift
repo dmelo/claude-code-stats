@@ -52,6 +52,111 @@ extension Double {
     var usd: String {
         Self.usdFormatter.string(from: NSNumber(value: self)) ?? "$0.00"
     }
+
+    private static let usdFloorFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        // Round down, never to nearest: these values are labeled a conservative
+        // floor, so 160.7 must render "$160" and 0.6 must render "$0". Rounding up
+        // would overstate the very thing the "floor" caption promises it won't.
+        formatter.roundingMode = .down
+        return formatter
+    }()
+
+    /// Floored to whole dollars, for conservative floor estimates where cents
+    /// would be false precision, e.g. 160.7 → "$160", 0.6 → "$0".
+    var usdFloor: String {
+        Self.usdFloorFormatter.string(from: NSNumber(value: self)) ?? "$0"
+    }
+
+    private static let wholeFloorFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        formatter.roundingMode = .down
+        return formatter
+    }()
+
+    /// Floored to a whole grouped number with no currency symbol, e.g. 516 →
+    /// "516", 1234 → "1,234". For the upper bound of a currency range whose lower
+    /// bound already carries the symbol ("$166–516"). The symbol is never stripped
+    /// by string surgery — `dropFirst()` on a formatted currency string breaks
+    /// under non-en_US formats like "US$ 166" or "166 $".
+    var wholeFloor: String {
+        Self.wholeFloorFormatter.string(from: NSNumber(value: self)) ?? "0"
+    }
+}
+
+// RTK (Rust Token Killer) proxies dev commands and filters their output before it
+// reaches Claude Code's context, logging each command's raw vs. filtered token
+// counts to a local SQLite history. This is that log summed over windows. "Saved"
+// means tool-output tokens kept out of context — a fraction of total usage, not of
+// the whole bill, and only for commands routed through RTK.
+struct RTKSavings {
+    let todaySaved: Int
+    let weekSaved: Int
+    let monthSaved: Int
+    let lifetimeSaved: Int
+    /// Raw pre-filter tokens across all routed commands — the denominator for the
+    /// average reduction. This is what RTK calls "input": the command's full
+    /// output before filtering, i.e. the input to RTK, not to the model.
+    let lifetimeRaw: Int
+    let commandCount: Int
+    /// $ per million tokens used to value saved tokens — a representative input
+    /// rate sourced from the spend price table (see
+    /// `CostService.representativeInputRate`). The values below are a deliberate
+    /// floor: saved tokens priced once at the input rate, so the true worth (with
+    /// multi-turn re-billing) is higher.
+    let inputRate: Double
+    /// Multiplier applied to the floor for the optimistic end of the value range:
+    /// the re-billing a saved token would have incurred had it stayed in context
+    /// (a cache write plus the account's observed re-reads). See
+    /// `CostService.contextRebillingCeiling`. 1.0 would collapse the range.
+    let ceilingMultiplier: Double
+    let lastUpdated: Date
+
+    /// Share of routed command output RTK stripped, lifetime. Clamped to 0…1:
+    /// the counts come from RTK's database, and malformed data (e.g. saved
+    /// exceeding raw) must not drive the meter past full width or show a
+    /// percentage outside 0–100%.
+    var reduction: Double {
+        guard lifetimeRaw > 0 else { return 0 }
+        return min(1, max(0, Double(lifetimeSaved) / Double(lifetimeRaw)))
+    }
+
+    // API-equivalent value of the saved tokens per window, as a range. The floor
+    // prices each token once at the input rate; the ceiling adds the context
+    // re-billing it would have incurred unfiltered. Truth sits between.
+    var todayFloor: Double { Double(todaySaved) / 1_000_000 * inputRate }
+    var weekFloor: Double { Double(weekSaved) / 1_000_000 * inputRate }
+    var monthFloor: Double { Double(monthSaved) / 1_000_000 * inputRate }
+    var todayCeiling: Double { todayFloor * ceilingMultiplier }
+    var weekCeiling: Double { weekFloor * ceilingMultiplier }
+    var monthCeiling: Double { monthFloor * ceilingMultiplier }
+}
+
+extension Int {
+    /// Compact token count for display: 79_609_145 → "79.6M", 42_842 → "42.8K",
+    /// 216 → "216". A count is shown at the largest unit whose one-decimal
+    /// rounded value stays below 1000, so a near-threshold count like 999_950 —
+    /// which "%.1f" would round to "1000.0K" — reads "1.0M" instead. The 0.99995
+    /// cutoff is where n/1000 rounds up to 1000.0 (n/next-unit ≥ 0.99995).
+    var tokensShort: String {
+        let value = Double(self)
+        let units: [(scale: Double, suffix: String)] = [
+            (1_000_000_000, "B"),
+            (1_000_000, "M"),
+            (1_000, "K"),
+        ]
+        for unit in units where value.magnitude / unit.scale >= 0.99995 {
+            return String(format: "%.1f%@", value / unit.scale, unit.suffix)
+        }
+        return "\(self)"
+    }
 }
 
 // One day's total. Days with no activity are present with a zero cost so the

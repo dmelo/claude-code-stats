@@ -13,6 +13,10 @@ class UsageViewModel: ObservableObject {
     // API-equivalent spend, computed from the local transcripts
     @Published var spend: SpendData?
 
+    // RTK token savings, read from RTK's local history db. Stays nil when RTK
+    // isn't installed, which keeps the card off the popover entirely.
+    @Published var rtkSavings: RTKSavings?
+
     private var refreshTimer: Timer?
 
     var backgroundRefreshEnabled: Bool = false {
@@ -74,6 +78,7 @@ class UsageViewModel: ObservableObject {
         // Also refresh status
         await refreshStatus()
         await refreshSpend()
+        await refreshRTKSavings()
     }
 
     // Spend reads the local transcripts, so it has no bearing on the usage
@@ -81,6 +86,23 @@ class UsageViewModel: ObservableObject {
     // is incremental after the first one.
     func refreshSpend() async {
         spend = await CostService.shared.fetchSpend()
+    }
+
+    // RTK savings come from RTK's own local SQLite log, independent of the usage
+    // endpoint. If RTK is gone entirely the card is cleared so it self-hides;
+    // otherwise the last-good value is kept on a nil fetch so a transient db lock
+    // doesn't blink the card away. It first appears once RTK has logged a command.
+    func refreshRTKSavings() async {
+        if let latest = await RTKSavingsService.shared.fetch() {
+            rtkSavings = latest
+        } else if !(await RTKSavingsService.shared.isInstalled) {
+            // fetch() returned nil: clear the card only when RTK is actually gone.
+            // Re-checking install state *after* the fetch (rather than gating
+            // before it) closes the window where RTK is removed between the check
+            // and the fetch; a nil while still installed is a transient read
+            // failure, so the last-good value stays put.
+            rtkSavings = nil
+        }
     }
 
     func refreshStatus() async {

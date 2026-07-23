@@ -10,6 +10,7 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 - **Current Session** - 5-hour rolling window usage with reset countdown
 - **Weekly Limits** - All models combined usage with reset time
 - **API-equivalent spend** - What your token usage would have cost at API rates: today, the last 7 days, and month to date, with a per-model breakdown and a 30-day chart you can hover for any day's figure. Read from Claude Code's own transcripts on disk, so it needs no extra tooling and makes no network calls
+- **RTK savings** - If you run your dev commands through RTK (Rust Token Killer), shows how many tool-output tokens it kept out of Claude Code's context: today, the last 7 days, and month to date, plus a lifetime total, an average-reduction meter, and an API-equivalent value range. The range spans a conservative floor (each saved token priced once) and an optimistic ceiling (adding the re-billing an unfiltered result would incur, scaled by your own observed cache re-read rate). Read from RTK's local history database, so it appears only when RTK is installed and makes no network calls
 - **Auto-refresh** - Updates every 5 minutes automatically
 - **Claude service status** - Live status from [status.claude.com](https://status.claude.com) shown in the footer (Operational, Degraded, Outage, Critical)
 - **Version update detection** - Checks for new Claude Code releases hourly via GitHub; shows a red dot badge on the menu bar icon and a banner when an update is available, with a link to the changelog
@@ -94,15 +95,25 @@ The built app will be in `~/Library/Developer/Xcode/DerivedData/ClaudeCodeStats-
 ClaudeCodeStats/
 ├── ClaudeCodeStats.xcodeproj
 └── ClaudeCodeStats/
-    ├── ClaudeCodeStatsApp.swift    # App entry point
+    ├── ClaudeCodeStatsApp.swift     # App entry point (MenuBarExtra)
     ├── ContentView.swift            # Main popover view
+    ├── UsageViewModel.swift         # Usage, status, spend & RTK state
+    ├── Models.swift                 # Data models and formatters
+    ├── Theme.swift                  # Colors and appearance handling
+    ├── UpdateChecker.swift          # Update-check state
     ├── Services/
     │   ├── OAuthUsageService.swift  # Anthropic API usage via OAuth
+    │   ├── CostService.swift        # API-equivalent spend from transcripts
+    │   ├── RTKSavingsService.swift  # RTK token savings from its local history
+    │   ├── UsageHistoryService.swift# Usage history persistence
     │   ├── StatusService.swift      # Claude service health status
     │   └── VersionService.swift     # Claude Code version update checker
     └── Views/
         ├── UsageCardView.swift      # Usage card component
         ├── ProgressBarView.swift    # Progress bar component
+        ├── SpendCardView.swift      # API-equivalent spend card
+        ├── SpendChartView.swift     # 30-day spend chart
+        ├── RTKSavingsCardView.swift # RTK token savings card
         └── SettingsView.swift       # Settings screen
 ```
 
@@ -110,6 +121,7 @@ ClaudeCodeStats/
 
 - The app reads OAuth credentials from `~/.claude/.credentials.json` or the macOS Keychain (no secrets are stored by the app itself)
 - The app communicates with the Anthropic API to fetch usage data, status.claude.com for service health, and the GitHub API for version checks
+- API-equivalent spend and RTK savings are computed entirely on your machine from Claude Code's transcripts and RTK's local history database — no network calls, and nothing about your usage leaves your device
 - No data is sent to any third parties
 
 ## License

@@ -85,7 +85,13 @@ private let chartWindowDays = 30
 /// transcript's offset whether or not its entries parsed — so without a bump,
 /// repricing is ignored and a parsing fix never sees the bytes it was meant to
 /// handle.
-private let cacheVersion = 5
+///
+/// 6: began accumulating `establishedTokens`/`cacheReadTokens` for the RTK
+/// savings ceiling. A warm cache only advances these from newly-appended bytes,
+/// so the corpus-wide ratio needs one full re-scan to be representative.
+/// 7: count those totals once per unique entry instead of per scanned copy, so a
+/// whole-file re-read (the shrink path) can't inflate them; re-scan to rebuild.
+private let cacheVersion = 7
 
 private struct EntryCost: Codable {
     let model: String
@@ -105,6 +111,15 @@ private struct CostCache: Codable {
     /// append-only, so a later scan resumes here instead of re-reading the file.
     var offsets: [String: UInt64] = [:]
     var days: [String: DayRollup] = [:]
+    /// Corpus-wide running totals for the re-read ratio ρ = reads / established,
+    /// which feeds the RTK savings ceiling. "Established" is fresh input plus
+    /// cache writes (a token entering context once); "read" is cache re-reads.
+    /// Counted once per unique entry (see `ingest`): streamed copies and whole-file
+    /// re-reads revisit the same entry, and re-adding its tokens would skew the
+    /// ratio. Not pruned: a lifetime ratio is what the ceiling wants, and it stays
+    /// stable as history ages out.
+    var establishedTokens: UInt64 = 0
+    var cacheReadTokens: UInt64 = 0
 }
 
 /// FNV-1a. Swift's `Hasher` is seeded per-process, so its values can't be
@@ -125,6 +140,17 @@ private func entryHash(_ string: String) -> String {
 /// concurrent scans.
 actor CostService {
     static let shared = CostService()
+
+    /// A representative input rate ($ per million tokens) for valuing tokens whose
+    /// source model isn't recorded — e.g. RTK's saved tool-output tokens, which
+    /// carry no model. Uses Opus 4.8's input rate (the dominant coding model),
+    /// drawn from the same price table as spend so the two can't drift. A `static`
+    /// on the actor, hence nonisolated and callable synchronously. Deliberately
+    /// conservative: it ignores both pricier models and the multi-turn re-billing
+    /// that inflates a tool result's true cost, so figures built on it are floors.
+    static func representativeInputRate() -> Double {
+        price(for: "claude-opus-4-8")?.rate(on: Date()).input ?? 5
+    }
 
     private let fileManager = FileManager.default
     private let storageURL: URL
@@ -280,6 +306,14 @@ actor CostService {
         let day = entryDay[key] ?? Self.dayKey(for: date)
         var rollup = cache.days[day] ?? DayRollup()
         let cost = cost(usage: usage, price: modelPrice, on: date)
+        // Ratio inputs, counted once per entry — only the first time it's ever
+        // seen, while entryDay has no record of it yet. Later streamed copies and
+        // whole-file re-reads (the shrink path) revisit the same entry, and adding
+        // their tokens again would skew ρ; the cost dedup below guards cost the
+        // same way. isDirty is set by the scan that produced this line.
+        if entryDay[key] == nil {
+            accumulateReReadStats(usage: usage)
+        }
         if let existing = rollup.entries[key], existing.cost >= cost { return }
 
         rollup.entries[key] = EntryCost(model: modelPrice.display, cost: cost)
@@ -313,6 +347,41 @@ actor CostService {
             total += tokens(usage, "cache_creation_input_tokens") * input * cacheWrite5mMultiplier
         }
         return total
+    }
+
+    /// Adds this entry's tokens to the corpus re-read totals. "Established" is
+    /// fresh input plus cache writes (a token entering context once); "read" is
+    /// the cache re-reads it accrues on later turns. Mirrors the token fields
+    /// `cost` prices, so the two stay in step.
+    private func accumulateReReadStats(usage: [String: Any]) {
+        // Read signed and clamp to ≥ 0: a corrupt negative count would wrap to a
+        // huge UInt64 through uint64Value and blow up ρ and the ceiling multiplier.
+        func tokens(_ dict: [String: Any], _ key: String) -> UInt64 {
+            UInt64(max(0, (dict[key] as? NSNumber)?.int64Value ?? 0))
+        }
+
+        var established = tokens(usage, "input_tokens")
+        if let creation = usage["cache_creation"] as? [String: Any] {
+            established += tokens(creation, "ephemeral_5m_input_tokens")
+            established += tokens(creation, "ephemeral_1h_input_tokens")
+        } else {
+            established += tokens(usage, "cache_creation_input_tokens")
+        }
+        cache.establishedTokens += established
+        cache.cacheReadTokens += tokens(usage, "cache_read_input_tokens")
+    }
+
+    /// The multiple of the input rate a tool-output token would have cost had RTK
+    /// *not* filtered it from context: a cache write (`cacheWrite5mMultiplier`)
+    /// plus this account's observed re-reads (`cacheReadMultiplier × ρ`). The RTK
+    /// card's floor prices saved tokens at 1× input; this is the ceiling. ρ is a
+    /// corpus average, so it's inflated by always-present tokens (the system
+    /// prompt is re-read every turn) — fitting for an optimistic upper bound.
+    /// Falls back to a bare cache write when nothing has been scanned yet.
+    func contextRebillingCeiling() -> Double {
+        guard cache.establishedTokens > 0 else { return cacheWrite5mMultiplier }
+        let rho = Double(cache.cacheReadTokens) / Double(cache.establishedTokens)
+        return cacheWrite5mMultiplier + cacheReadMultiplier * rho
     }
 
     // MARK: - Aggregation

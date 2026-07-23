@@ -136,6 +136,11 @@ struct ContentView: View {
             if let spend = viewModel.spend {
                 SpendCardView(spend: spend)
             }
+
+            // Only present when RTK is installed and has logged commands.
+            if let rtk = viewModel.rtkSavings {
+                RTKSavingsCardView(savings: rtk)
+            }
         }
         .padding(12)
     }
