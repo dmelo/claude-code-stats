@@ -91,9 +91,13 @@ struct RTKSavings {
     let inputRate: Double
     let lastUpdated: Date
 
-    /// Share of routed command output RTK stripped, lifetime (0–1).
+    /// Share of routed command output RTK stripped, lifetime. Clamped to 0…1:
+    /// the counts come from RTK's database, and malformed data (e.g. saved
+    /// exceeding raw) must not drive the meter past full width or show a
+    /// percentage outside 0–100%.
     var reduction: Double {
-        lifetimeRaw > 0 ? Double(lifetimeSaved) / Double(lifetimeRaw) : 0
+        guard lifetimeRaw > 0 else { return 0 }
+        return min(1, max(0, Double(lifetimeSaved) / Double(lifetimeRaw)))
     }
 
     // API-equivalent value of the saved tokens per window — floor estimates.
