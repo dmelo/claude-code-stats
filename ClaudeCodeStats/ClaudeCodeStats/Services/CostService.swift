@@ -85,7 +85,11 @@ private let chartWindowDays = 30
 /// transcript's offset whether or not its entries parsed — so without a bump,
 /// repricing is ignored and a parsing fix never sees the bytes it was meant to
 /// handle.
-private let cacheVersion = 5
+///
+/// 6: began accumulating `establishedTokens`/`cacheReadTokens` for the RTK
+/// savings ceiling. A warm cache only advances these from newly-appended bytes,
+/// so the corpus-wide ratio needs one full re-scan to be representative.
+private let cacheVersion = 6
 
 private struct EntryCost: Codable {
     let model: String
@@ -105,6 +109,15 @@ private struct CostCache: Codable {
     /// append-only, so a later scan resumes here instead of re-reading the file.
     var offsets: [String: UInt64] = [:]
     var days: [String: DayRollup] = [:]
+    /// Corpus-wide running totals for the re-read ratio ρ = reads / established,
+    /// which feeds the RTK savings ceiling. "Established" is fresh input plus
+    /// cache writes (a token entering context once); "read" is cache re-reads.
+    /// Summed across every scanned copy rather than deduped entries — a copy
+    /// carries identical input/cache counts, so the duplication scales numerator
+    /// and denominator alike and the ratio is unaffected. Not pruned: a lifetime
+    /// ratio is what the ceiling wants, and it stays stable as history ages out.
+    var establishedTokens: UInt64 = 0
+    var cacheReadTokens: UInt64 = 0
 }
 
 /// FNV-1a. Swift's `Hasher` is seeded per-process, so its values can't be
@@ -291,6 +304,10 @@ actor CostService {
         let day = entryDay[key] ?? Self.dayKey(for: date)
         var rollup = cache.days[day] ?? DayRollup()
         let cost = cost(usage: usage, price: modelPrice, on: date)
+        // Ratio inputs, before the dedup return: unlike cost, these want every
+        // copy (see CostCache.establishedTokens). isDirty is already set by the
+        // scan that produced this line, so the totals persist with it.
+        accumulateReReadStats(usage: usage)
         if let existing = rollup.entries[key], existing.cost >= cost { return }
 
         rollup.entries[key] = EntryCost(model: modelPrice.display, cost: cost)
@@ -324,6 +341,39 @@ actor CostService {
             total += tokens(usage, "cache_creation_input_tokens") * input * cacheWrite5mMultiplier
         }
         return total
+    }
+
+    /// Adds this entry's tokens to the corpus re-read totals. "Established" is
+    /// fresh input plus cache writes (a token entering context once); "read" is
+    /// the cache re-reads it accrues on later turns. Mirrors the token fields
+    /// `cost` prices, so the two stay in step.
+    private func accumulateReReadStats(usage: [String: Any]) {
+        func tokens(_ dict: [String: Any], _ key: String) -> UInt64 {
+            (dict[key] as? NSNumber)?.uint64Value ?? 0
+        }
+
+        var established = tokens(usage, "input_tokens")
+        if let creation = usage["cache_creation"] as? [String: Any] {
+            established += tokens(creation, "ephemeral_5m_input_tokens")
+            established += tokens(creation, "ephemeral_1h_input_tokens")
+        } else {
+            established += tokens(usage, "cache_creation_input_tokens")
+        }
+        cache.establishedTokens += established
+        cache.cacheReadTokens += tokens(usage, "cache_read_input_tokens")
+    }
+
+    /// The multiple of the input rate a tool-output token would have cost had RTK
+    /// *not* filtered it from context: a cache write (`cacheWrite5mMultiplier`)
+    /// plus this account's observed re-reads (`cacheReadMultiplier × ρ`). The RTK
+    /// card's floor prices saved tokens at 1× input; this is the ceiling. ρ is a
+    /// corpus average, so it's inflated by always-present tokens (the system
+    /// prompt is re-read every turn) — fitting for an optimistic upper bound.
+    /// Falls back to a bare cache write when nothing has been scanned yet.
+    func contextRebillingCeiling() -> Double {
+        guard cache.establishedTokens > 0 else { return cacheWrite5mMultiplier }
+        let rho = Double(cache.cacheReadTokens) / Double(cache.establishedTokens)
+        return cacheWrite5mMultiplier + cacheReadMultiplier * rho
     }
 
     // MARK: - Aggregation

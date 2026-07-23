@@ -31,7 +31,7 @@ actor RTKSavingsService {
     /// Rolls up saved tokens over today / last 7 days / month-to-date plus a
     /// lifetime total. Returns `nil` when RTK isn't installed, the database can't
     /// be read, or it holds no commands yet — all of which just hide the card.
-    func fetch() -> RTKSavings? {
+    func fetch() async -> RTKSavings? {
         guard FileManager.default.fileExists(atPath: dbPath) else { return nil }
 
         var db: OpaquePointer?
@@ -89,6 +89,10 @@ actor RTKSavingsService {
         let count = Int(sqlite3_column_int64(stmt, 5))
         guard count > 0 else { return nil }
 
+        // Spend is refreshed before this in the view model, so CostService has
+        // already scanned and its observed re-read ratio is ready.
+        let ceilingMultiplier = await CostService.shared.contextRebillingCeiling()
+
         return RTKSavings(
             todaySaved: Int(sqlite3_column_int64(stmt, 0)),
             weekSaved: Int(sqlite3_column_int64(stmt, 1)),
@@ -97,6 +101,7 @@ actor RTKSavingsService {
             lifetimeRaw: Int(sqlite3_column_int64(stmt, 4)),
             commandCount: count,
             inputRate: CostService.representativeInputRate(),
+            ceilingMultiplier: ceilingMultiplier,
             lastUpdated: Date()
         )
     }

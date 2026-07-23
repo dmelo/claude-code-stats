@@ -13,12 +13,12 @@ struct RTKSavingsCardView: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textSecondary)
-                    .help("Tool-output tokens RTK kept out of Claude Code's context, and what they'd cost at API rates. A conservative floor — priced once at the input rate, ignoring the higher cost of re-sending context each turn. Covers only RTK-routed commands, so it's a slice of your usage, not your whole bill.")
+                    .help("Tool-output tokens RTK kept out of Claude Code's context, and what they'd cost at API rates. The floor prices each token once at the input rate; the ceiling adds the re-billing it would have incurred staying in context — a cache write plus your account's observed cache re-reads. Truth sits between. Covers only RTK-routed commands, so it's a slice of your usage, not your whole bill.")
             }
 
-            row("Today", savings.todaySaved, value: savings.todayValue)
-            row("Last 7 days", savings.weekSaved, value: savings.weekValue)
-            row("Month to date", savings.monthSaved, value: savings.monthValue)
+            row("Today", savings.todaySaved, floor: savings.todayFloor, ceiling: savings.todayCeiling)
+            row("Last 7 days", savings.weekSaved, floor: savings.weekFloor, ceiling: savings.weekCeiling)
+            row("Month to date", savings.monthSaved, floor: savings.monthFloor, ceiling: savings.monthCeiling)
 
             Divider()
                 .background(Theme.divider)
@@ -27,7 +27,7 @@ struct RTKSavingsCardView: View {
 
             reductionMeter
 
-            Text("≈ value kept off your bill (floor)")
+            Text("≈ value kept off your bill (floor – ceiling)")
                 .font(.system(size: 9))
                 .foregroundColor(Theme.textSecondary)
         }
@@ -36,27 +36,39 @@ struct RTKSavingsCardView: View {
         .cornerRadius(8)
     }
 
-    private func row(_ label: String, _ tokens: Int, value: Double? = nil) -> some View {
-        HStack(spacing: 8) {
+    private func row(_ label: String, _ tokens: Int, floor: Double? = nil, ceiling: Double? = nil) -> some View {
+        HStack(spacing: 6) {
             Text(label)
                 .font(.system(size: 11))
                 .foregroundColor(Theme.textSecondary)
+                .lineLimit(1)
 
-            Spacer()
+            Spacer(minLength: 4)
 
             Text(tokens.tokensShort)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundColor(Theme.textPrimary)
 
-            // API-equivalent value of those tokens, secondary to the token count
-            // and right-aligned in a fixed column so the dollar figures line up.
-            if let value {
-                Text("~\(value.usdFloor)")
-                    .font(.system(size: 11, design: .monospaced))
+            // API-equivalent value range, secondary to the token count and
+            // right-aligned in a fixed column so the ranges line up. Smaller than
+            // the token count so it stays subordinate and leaves room for the
+            // label without wrapping.
+            if let floor, let ceiling {
+                Text(Self.range(floor, ceiling))
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(Theme.textSecondary)
-                    .frame(width: 52, alignment: .trailing)
+                    .frame(width: 78, alignment: .trailing)
             }
         }
+    }
+
+    /// "$160–390", collapsing to a single "$160" when the two bounds round
+    /// together (e.g. a light day where both are under a dollar). The ceiling
+    /// drops its "$" since the floor already carries one.
+    private static func range(_ floor: Double, _ ceiling: Double) -> String {
+        let lo = floor.usdFloor
+        let hi = ceiling.usdFloor
+        return lo == hi ? lo : "\(lo)–\(hi.dropFirst())"
     }
 
     // Blue rather than the usage bars' green→red ramp: on those, fuller is worse;
@@ -101,6 +113,7 @@ struct RTKSavingsCardView: View {
         lifetimeRaw: 115_000_000,
         commandCount: 19_574,
         inputRate: 5,
+        ceilingMultiplier: 2.45,
         lastUpdated: Date()
     ))
     .padding()

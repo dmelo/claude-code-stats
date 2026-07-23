@@ -94,6 +94,11 @@ struct RTKSavings {
     /// floor: saved tokens priced once at the input rate, so the true worth (with
     /// multi-turn re-billing) is higher.
     let inputRate: Double
+    /// Multiplier applied to the floor for the optimistic end of the value range:
+    /// the re-billing a saved token would have incurred had it stayed in context
+    /// (a cache write plus the account's observed re-reads). See
+    /// `CostService.contextRebillingCeiling`. 1.0 would collapse the range.
+    let ceilingMultiplier: Double
     let lastUpdated: Date
 
     /// Share of routed command output RTK stripped, lifetime. Clamped to 0…1:
@@ -105,10 +110,15 @@ struct RTKSavings {
         return min(1, max(0, Double(lifetimeSaved) / Double(lifetimeRaw)))
     }
 
-    // API-equivalent value of the saved tokens per window — floor estimates.
-    var todayValue: Double { Double(todaySaved) / 1_000_000 * inputRate }
-    var weekValue: Double { Double(weekSaved) / 1_000_000 * inputRate }
-    var monthValue: Double { Double(monthSaved) / 1_000_000 * inputRate }
+    // API-equivalent value of the saved tokens per window, as a range. The floor
+    // prices each token once at the input rate; the ceiling adds the context
+    // re-billing it would have incurred unfiltered. Truth sits between.
+    var todayFloor: Double { Double(todaySaved) / 1_000_000 * inputRate }
+    var weekFloor: Double { Double(weekSaved) / 1_000_000 * inputRate }
+    var monthFloor: Double { Double(monthSaved) / 1_000_000 * inputRate }
+    var todayCeiling: Double { todayFloor * ceilingMultiplier }
+    var weekCeiling: Double { weekFloor * ceilingMultiplier }
+    var monthCeiling: Double { monthFloor * ceilingMultiplier }
 }
 
 extension Int {
