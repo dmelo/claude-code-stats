@@ -95,12 +95,17 @@ actor RTKSavingsService {
         // already scanned and its observed re-read ratio is ready.
         let ceilingMultiplier = await CostService.shared.contextRebillingCeiling()
 
+        // Clamp to ≥ 0: the counts come from RTK's external database, and a
+        // corrupt or negative value must not surface as negative tokens or dollars
+        // (mirrors the reduction clamp in RTKSavings).
+        func nonNegative(_ column: Int32) -> Int { max(0, Int(sqlite3_column_int64(stmt, column))) }
+
         return RTKSavings(
-            todaySaved: Int(sqlite3_column_int64(stmt, 0)),
-            weekSaved: Int(sqlite3_column_int64(stmt, 1)),
-            monthSaved: Int(sqlite3_column_int64(stmt, 2)),
-            lifetimeSaved: Int(sqlite3_column_int64(stmt, 3)),
-            lifetimeRaw: Int(sqlite3_column_int64(stmt, 4)),
+            todaySaved: nonNegative(0),
+            weekSaved: nonNegative(1),
+            monthSaved: nonNegative(2),
+            lifetimeSaved: nonNegative(3),
+            lifetimeRaw: nonNegative(4),
             commandCount: count,
             inputRate: CostService.representativeInputRate(),
             ceilingMultiplier: ceilingMultiplier,

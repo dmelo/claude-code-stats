@@ -57,6 +57,7 @@ struct RTKSavingsCardView: View {
                 Text(Self.range(floor, ceiling))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(Theme.textSecondary)
+                    .lineLimit(1)
                     .frame(width: 78, alignment: .trailing)
             }
         }
