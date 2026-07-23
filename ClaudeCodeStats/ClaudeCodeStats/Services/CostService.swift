@@ -354,8 +354,10 @@ actor CostService {
     /// the cache re-reads it accrues on later turns. Mirrors the token fields
     /// `cost` prices, so the two stay in step.
     private func accumulateReReadStats(usage: [String: Any]) {
+        // Read signed and clamp to ≥ 0: a corrupt negative count would wrap to a
+        // huge UInt64 through uint64Value and blow up ρ and the ceiling multiplier.
         func tokens(_ dict: [String: Any], _ key: String) -> UInt64 {
-            (dict[key] as? NSNumber)?.uint64Value ?? 0
+            UInt64(max(0, (dict[key] as? NSNumber)?.int64Value ?? 0))
         }
 
         var established = tokens(usage, "input_tokens")
