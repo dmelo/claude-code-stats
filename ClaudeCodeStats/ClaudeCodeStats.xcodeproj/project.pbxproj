@@ -23,6 +23,8 @@
 		A19 /* CostService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21 /* CostService.swift */; };
 		A20 /* SpendCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22 /* SpendCardView.swift */; };
 		A21 /* SpendChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B23 /* SpendChartView.swift */; };
+		A22 /* RTKSavingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24 /* RTKSavingsService.swift */; };
+		A23 /* RTKSavingsCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25 /* RTKSavingsCardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +46,8 @@
 		B21 /* CostService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostService.swift; sourceTree = "<group>"; };
 		B22 /* SpendCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendCardView.swift; sourceTree = "<group>"; };
 		B23 /* SpendChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendChartView.swift; sourceTree = "<group>"; };
+		B24 /* RTKSavingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RTKSavingsService.swift; sourceTree = "<group>"; };
+		B25 /* RTKSavingsCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RTKSavingsCardView.swift; sourceTree = "<group>"; };
 		P01 /* ClaudeCodeStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeCodeStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -87,6 +91,7 @@
 			isa = PBXGroup;
 			children = (
 				B21 /* CostService.swift */,
+				B24 /* RTKSavingsService.swift */,
 				B14 /* StatusService.swift */,
 				B20 /* UsageHistoryService.swift */,
 				B15 /* VersionService.swift */,
@@ -103,6 +108,7 @@
 				B13 /* SettingsView.swift */,
 				B22 /* SpendCardView.swift */,
 				B23 /* SpendChartView.swift */,
+				B25 /* RTKSavingsCardView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -199,6 +205,8 @@
 				A19 /* CostService.swift in Sources */,
 				A20 /* SpendCardView.swift in Sources */,
 				A21 /* SpendChartView.swift in Sources */,
+				A22 /* RTKSavingsService.swift in Sources */,
+				A23 /* RTKSavingsCardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

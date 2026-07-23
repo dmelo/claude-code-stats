@@ -52,6 +52,72 @@ extension Double {
     var usd: String {
         Self.usdFormatter.string(from: NSNumber(value: self)) ?? "$0.00"
     }
+
+    private static let usdWholeFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.maximumFractionDigits = 0
+        return formatter
+    }()
+
+    /// Rounded to whole dollars, for floor estimates where cents would be false
+    /// precision, e.g. 160.4 → "$160", 0.21 → "$0".
+    var usdWhole: String {
+        Self.usdWholeFormatter.string(from: NSNumber(value: self)) ?? "$0"
+    }
+}
+
+// RTK (Rust Token Killer) proxies dev commands and filters their output before it
+// reaches Claude Code's context, logging each command's raw vs. filtered token
+// counts to a local SQLite history. This is that log summed over windows. "Saved"
+// means tool-output tokens kept out of context — a fraction of total usage, not of
+// the whole bill, and only for commands routed through RTK.
+struct RTKSavings {
+    let todaySaved: Int
+    let weekSaved: Int
+    let monthSaved: Int
+    let lifetimeSaved: Int
+    /// Raw pre-filter tokens across all routed commands — the denominator for the
+    /// average reduction. This is what RTK calls "input": the command's full
+    /// output before filtering, i.e. the input to RTK, not to the model.
+    let lifetimeRaw: Int
+    let commandCount: Int
+    /// $ per million tokens used to value saved tokens — a representative input
+    /// rate sourced from the spend price table (see
+    /// `CostService.representativeInputRate`). The values below are a deliberate
+    /// floor: saved tokens priced once at the input rate, so the true worth (with
+    /// multi-turn re-billing) is higher.
+    let inputRate: Double
+    let lastUpdated: Date
+
+    /// Share of routed command output RTK stripped, lifetime (0–1).
+    var reduction: Double {
+        lifetimeRaw > 0 ? Double(lifetimeSaved) / Double(lifetimeRaw) : 0
+    }
+
+    // API-equivalent value of the saved tokens per window — floor estimates.
+    var todayValue: Double { Double(todaySaved) / 1_000_000 * inputRate }
+    var weekValue: Double { Double(weekSaved) / 1_000_000 * inputRate }
+    var monthValue: Double { Double(monthSaved) / 1_000_000 * inputRate }
+}
+
+extension Int {
+    /// Compact token count for display: 79_609_145 → "79.6M", 42_842 → "42.8K",
+    /// 216 → "216".
+    var tokensShort: String {
+        let value = Double(self)
+        switch value.magnitude {
+        case 1_000_000_000...:
+            return String(format: "%.1fB", value / 1_000_000_000)
+        case 1_000_000...:
+            return String(format: "%.1fM", value / 1_000_000)
+        case 1_000...:
+            return String(format: "%.1fK", value / 1_000)
+        default:
+            return "\(self)"
+        }
+    }
 }
 
 // One day's total. Days with no activity are present with a zero cost so the

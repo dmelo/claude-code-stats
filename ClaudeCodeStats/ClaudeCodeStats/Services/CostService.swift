@@ -126,6 +126,17 @@ private func entryHash(_ string: String) -> String {
 actor CostService {
     static let shared = CostService()
 
+    /// A representative input rate ($ per million tokens) for valuing tokens whose
+    /// source model isn't recorded — e.g. RTK's saved tool-output tokens, which
+    /// carry no model. Uses Opus 4.8's input rate (the dominant coding model),
+    /// drawn from the same price table as spend so the two can't drift. A `static`
+    /// on the actor, hence nonisolated and callable synchronously. Deliberately
+    /// conservative: it ignores both pricier models and the multi-turn re-billing
+    /// that inflates a tool result's true cost, so figures built on it are floors.
+    static func representativeInputRate() -> Double {
+        price(for: "claude-opus-4-8")?.rate(on: Date()).input ?? 5
+    }
+
     private let fileManager = FileManager.default
     private let storageURL: URL
     private var cache: CostCache
