@@ -89,10 +89,14 @@ class UsageViewModel: ObservableObject {
     }
 
     // RTK savings come from RTK's own local SQLite log, independent of the usage
-    // endpoint. Kept as last-good on a nil result so a transient db lock doesn't
-    // blink the card away; it only appears once RTK has logged at least one
-    // command, and lingers until the next launch if RTK is later removed.
+    // endpoint. If RTK is gone entirely the card is cleared so it self-hides;
+    // otherwise the last-good value is kept on a nil fetch so a transient db lock
+    // doesn't blink the card away. It first appears once RTK has logged a command.
     func refreshRTKSavings() async {
+        guard await RTKSavingsService.shared.isInstalled else {
+            rtkSavings = nil
+            return
+        }
         if let latest = await RTKSavingsService.shared.fetch() {
             rtkSavings = latest
         }
