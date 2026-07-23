@@ -72,8 +72,12 @@ actor RTKSavingsService {
         """
 
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        // Register finalize before the guard so cleanup covers every exit,
+        // including the prepare-failure return. (SQLite already nulls *ppStmt on
+        // prepare failure, so that path can't actually leak, and
+        // sqlite3_finalize(nil) is a no-op — this just doesn't rely on it.)
         defer { sqlite3_finalize(stmt) }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
 
         sqlite3_bind_text(stmt, 1, today, -1, Self.transient)
         sqlite3_bind_text(stmt, 2, week, -1, Self.transient)
