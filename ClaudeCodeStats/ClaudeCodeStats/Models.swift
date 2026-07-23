@@ -113,19 +113,21 @@ struct RTKSavings {
 
 extension Int {
     /// Compact token count for display: 79_609_145 → "79.6M", 42_842 → "42.8K",
-    /// 216 → "216".
+    /// 216 → "216". A count is shown at the largest unit whose one-decimal
+    /// rounded value stays below 1000, so a near-threshold count like 999_950 —
+    /// which "%.1f" would round to "1000.0K" — reads "1.0M" instead. The 0.99995
+    /// cutoff is where n/1000 rounds up to 1000.0 (n/next-unit ≥ 0.99995).
     var tokensShort: String {
         let value = Double(self)
-        switch value.magnitude {
-        case 1_000_000_000...:
-            return String(format: "%.1fB", value / 1_000_000_000)
-        case 1_000_000...:
-            return String(format: "%.1fM", value / 1_000_000)
-        case 1_000...:
-            return String(format: "%.1fK", value / 1_000)
-        default:
-            return "\(self)"
+        let units: [(scale: Double, suffix: String)] = [
+            (1_000_000_000, "B"),
+            (1_000_000, "M"),
+            (1_000, "K"),
+        ]
+        for unit in units where value.magnitude / unit.scale >= 0.99995 {
+            return String(format: "%.1f%@", value / unit.scale, unit.suffix)
         }
+        return "\(self)"
     }
 }
 
