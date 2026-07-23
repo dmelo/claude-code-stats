@@ -89,7 +89,9 @@ private let chartWindowDays = 30
 /// 6: began accumulating `establishedTokens`/`cacheReadTokens` for the RTK
 /// savings ceiling. A warm cache only advances these from newly-appended bytes,
 /// so the corpus-wide ratio needs one full re-scan to be representative.
-private let cacheVersion = 6
+/// 7: count those totals once per unique entry instead of per scanned copy, so a
+/// whole-file re-read (the shrink path) can't inflate them; re-scan to rebuild.
+private let cacheVersion = 7
 
 private struct EntryCost: Codable {
     let model: String
@@ -112,10 +114,10 @@ private struct CostCache: Codable {
     /// Corpus-wide running totals for the re-read ratio ρ = reads / established,
     /// which feeds the RTK savings ceiling. "Established" is fresh input plus
     /// cache writes (a token entering context once); "read" is cache re-reads.
-    /// Summed across every scanned copy rather than deduped entries — a copy
-    /// carries identical input/cache counts, so the duplication scales numerator
-    /// and denominator alike and the ratio is unaffected. Not pruned: a lifetime
-    /// ratio is what the ceiling wants, and it stays stable as history ages out.
+    /// Counted once per unique entry (see `ingest`): streamed copies and whole-file
+    /// re-reads revisit the same entry, and re-adding its tokens would skew the
+    /// ratio. Not pruned: a lifetime ratio is what the ceiling wants, and it stays
+    /// stable as history ages out.
     var establishedTokens: UInt64 = 0
     var cacheReadTokens: UInt64 = 0
 }
@@ -304,10 +306,14 @@ actor CostService {
         let day = entryDay[key] ?? Self.dayKey(for: date)
         var rollup = cache.days[day] ?? DayRollup()
         let cost = cost(usage: usage, price: modelPrice, on: date)
-        // Ratio inputs, before the dedup return: unlike cost, these want every
-        // copy (see CostCache.establishedTokens). isDirty is already set by the
-        // scan that produced this line, so the totals persist with it.
-        accumulateReReadStats(usage: usage)
+        // Ratio inputs, counted once per entry — only the first time it's ever
+        // seen, while entryDay has no record of it yet. Later streamed copies and
+        // whole-file re-reads (the shrink path) revisit the same entry, and adding
+        // their tokens again would skew ρ; the cost dedup below guards cost the
+        // same way. isDirty is set by the scan that produced this line.
+        if entryDay[key] == nil {
+            accumulateReReadStats(usage: usage)
+        }
         if let existing = rollup.entries[key], existing.cost >= cost { return }
 
         rollup.entries[key] = EntryCost(model: modelPrice.display, cost: cost)
