@@ -71,6 +71,24 @@ extension Double {
     var usdFloor: String {
         Self.usdFloorFormatter.string(from: NSNumber(value: self)) ?? "$0"
     }
+
+    private static let wholeFloorFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        formatter.roundingMode = .down
+        return formatter
+    }()
+
+    /// Floored to a whole grouped number with no currency symbol, e.g. 516 →
+    /// "516", 1234 → "1,234". For the upper bound of a currency range whose lower
+    /// bound already carries the symbol ("$166–516"). The symbol is never stripped
+    /// by string surgery — `dropFirst()` on a formatted currency string breaks
+    /// under non-en_US formats like "US$ 166" or "166 $".
+    var wholeFloor: String {
+        Self.wholeFloorFormatter.string(from: NSNumber(value: self)) ?? "0"
+    }
 }
 
 // RTK (Rust Token Killer) proxies dev commands and filters their output before it

@@ -63,12 +63,12 @@ struct RTKSavingsCardView: View {
     }
 
     /// "$160–390", collapsing to a single "$160" when the two bounds round
-    /// together (e.g. a light day where both are under a dollar). The ceiling
-    /// drops its "$" since the floor already carries one.
+    /// together (e.g. a light day where both are under a dollar). The ceiling is a
+    /// plain grouped number — the floor already carries the currency symbol, so we
+    /// never strip one off a locale-formatted string.
     private static func range(_ floor: Double, _ ceiling: Double) -> String {
         let lo = floor.usdFloor
-        let hi = ceiling.usdFloor
-        return lo == hi ? lo : "\(lo)–\(hi.dropFirst())"
+        return lo == ceiling.usdFloor ? lo : "\(lo)–\(ceiling.wholeFloor)"
     }
 
     // Blue rather than the usage bars' green→red ramp: on those, fuller is worse;
