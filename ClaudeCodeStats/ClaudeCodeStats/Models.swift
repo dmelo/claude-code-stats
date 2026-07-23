@@ -53,18 +53,23 @@ extension Double {
         Self.usdFormatter.string(from: NSNumber(value: self)) ?? "$0.00"
     }
 
-    private static let usdWholeFormatter: NumberFormatter = {
+    private static let usdFloorFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "USD"
+        formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
+        // Round down, never to nearest: these values are labeled a conservative
+        // floor, so 160.7 must render "$160" and 0.6 must render "$0". Rounding up
+        // would overstate the very thing the "floor" caption promises it won't.
+        formatter.roundingMode = .down
         return formatter
     }()
 
-    /// Rounded to whole dollars, for floor estimates where cents would be false
-    /// precision, e.g. 160.4 → "$160", 0.21 → "$0".
-    var usdWhole: String {
-        Self.usdWholeFormatter.string(from: NSNumber(value: self)) ?? "$0"
+    /// Floored to whole dollars, for conservative floor estimates where cents
+    /// would be false precision, e.g. 160.7 → "$160", 0.6 → "$0".
+    var usdFloor: String {
+        Self.usdFloorFormatter.string(from: NSNumber(value: self)) ?? "$0"
     }
 }
 

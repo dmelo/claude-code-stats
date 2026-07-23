@@ -51,7 +51,7 @@ struct RTKSavingsCardView: View {
             // API-equivalent value of those tokens, secondary to the token count
             // and right-aligned in a fixed column so the dollar figures line up.
             if let value {
-                Text("~\(value.usdWhole)")
+                Text("~\(value.usdFloor)")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(Theme.textSecondary)
                     .frame(width: 52, alignment: .trailing)
