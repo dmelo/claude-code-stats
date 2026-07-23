@@ -44,11 +44,13 @@ actor RTKSavingsService {
         // unsandboxed), and WAL readers don't block RTK's concurrent writes.
         // `immutable=1` would also open it, but is documented undefined behaviour
         // against a file another process is actively modifying — which RTK is.
-        guard sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else {
-            sqlite3_close(db)
-            return nil
-        }
+        let openResult = sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READWRITE, nil)
+        // Register close before the guard so the handle is released on every path
+        // in one place. open_v2 allocates a connection to close even when it fails
+        // (except on OOM, where it sets nil and sqlite3_close(nil) is a no-op), so
+        // this also covers the failure return.
         defer { sqlite3_close(db) }
+        guard openResult == SQLITE_OK else { return nil }
         // Wait out a transient writer lock rather than failing the whole refresh.
         sqlite3_busy_timeout(db, 2000)
 
