@@ -23,7 +23,13 @@ cp -R ~/Library/Developer/Xcode/DerivedData/ClaudeCodeStats-*/Build/Products/Rel
 open /Applications/ClaudeCodeStats.app
 ```
 
-There are no tests or linters configured.
+There are no tests or linters configured, so verifying a change means running the app and looking at it. Three non-obvious traps when doing that from a shell:
+
+- **Launch with `open`, never `&`.** A `.app` started as `"$BINARY" &` from a Bash tool dies when that shell returns, often mid-work — `open /Applications/ClaudeCodeStats.app` hands it to LaunchServices so it survives. To time a scan or wait on a side effect, poll the artifact (`until [ -f "$cost_cache" ]; do sleep 2; done`), don't hold the process open.
+- **Instrument to a file, not stderr.** A menu bar app has no attached terminal, and one you'll `pkill` loses buffered stdout/stderr — write debug lines to a file (`/tmp/…`) and `cat` it after.
+- **AppleScript can't open the MenuBarExtra popover** (`click menu bar item …` does nothing). To inspect a view in a specific state or appearance without the running app, compile the real views into a standalone `ImageRenderer` harness and render at a chosen `\.colorScheme` + sample data (`swiftc main.swift Theme.swift Models.swift Views/*.swift` — top-level code needs the file named `main.swift`). It renders everything except `ScrollView` content, which comes back blank.
+
+`CostService` spend is validated against `npx ccusage` — but ccusage and a fresh scan **must be measured at the same instant**. A live corpus grows every few seconds while Claude Code runs, so a scan compared against a ccusage snapshot from minutes earlier shows a false delta (this produced a confidently-wrong "0.7% residual" that was pure skew; measured together, they agree to the cent on unused models).
 
 ## Architecture
 
