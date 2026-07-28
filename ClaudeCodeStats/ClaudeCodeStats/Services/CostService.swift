@@ -46,6 +46,7 @@ private let sonnet5IntroEnds: Date = {
 // missing from this table is skipped, which is also how the synthetic entries
 // Claude Code writes for local errors ("<synthetic>") stay out of the total.
 private let priceTable: [(prefix: String, price: ModelPrice)] = [
+    ("claude-opus-5", ModelPrice(display: "Opus 5", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-8", ModelPrice(display: "Opus 4.8", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-7", ModelPrice(display: "Opus 4.7", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-6", ModelPrice(display: "Opus 4.6", standard: Rate(input: 5, output: 25))),
@@ -91,7 +92,10 @@ private let chartWindowDays = 30
 /// so the corpus-wide ratio needs one full re-scan to be representative.
 /// 7: count those totals once per unique entry instead of per scanned copy, so a
 /// whole-file re-read (the shrink path) can't inflate them; re-scan to rebuild.
-private let cacheVersion = 7
+/// 8: added Opus 5 to the price table. It shipped as a new prefix the table had
+/// never seen, so every Opus 5 entry was skipped outright rather than mispriced —
+/// silently omitting the model from spend since it started being used.
+private let cacheVersion = 8
 
 private struct EntryCost: Codable {
     let model: String
