@@ -14,15 +14,18 @@ struct SettingsView: View {
             Divider()
                 .background(Theme.divider)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    authStatusSection
-                    appearanceSection
-                    menuBarDisplaySection
-                    versionRow
-                }
-                .padding(12)
+            // A plain VStack, not a ScrollView: inside MenuBarExtra(.window) a
+            // ScrollView reports an indefinite fitting height, so the popover
+            // keeps the taller main-view height while the scroll content
+            // collapses and clips (issue #25). The settings content is short
+            // enough to always fit, so let it size the window naturally.
+            VStack(alignment: .leading, spacing: 16) {
+                authStatusSection
+                appearanceSection
+                menuBarDisplaySection
+                versionRow
             }
+            .padding(12)
         }
         .frame(width: 280)
         .background(Theme.background)
