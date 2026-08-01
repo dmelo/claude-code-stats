@@ -353,11 +353,17 @@ private struct WindowFitter: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         let height = targetHeight
-        guard height > 1 else { return }
-        // Defer to the next runloop tick so the panel exists and AppKit has
-        // finished the current layout pass before we override the frame.
-        DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
+        // updateNSView runs on the main thread, so check the live panel height
+        // synchronously and bail before scheduling anything when it already
+        // matches — otherwise a stable popover enqueues a redundant block on
+        // every SwiftUI layout pass.
+        guard height > 1, let window = nsView.window,
+              abs(window.frame.height - height) > 0.5 else { return }
+        // Defer only the actual setFrame to the next runloop tick so we don't
+        // mutate the panel mid-SwiftUI-update; weak-capture the window so a
+        // torn-down popover isn't retained past teardown.
+        DispatchQueue.main.async { [weak window] in
+            guard let window else { return }
             let frame = window.frame
             guard abs(frame.height - height) > 0.5 else { return }
             window.setFrame(
