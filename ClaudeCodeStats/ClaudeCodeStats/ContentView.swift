@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var viewModel: UsageViewModel
@@ -13,16 +14,28 @@ struct ContentView: View {
     }()
 
     var body: some View {
-        if showingSettings {
-            SettingsView(isPresented: $showingSettings)
-                .onChange(of: showingSettings) { _, newValue in
-                    if !newValue {
-                        Task { await viewModel.refresh() }
+        Group {
+            if showingSettings {
+                SettingsView(isPresented: $showingSettings)
+                    .onChange(of: showingSettings) { _, newValue in
+                        if !newValue {
+                            Task { await viewModel.refresh() }
+                        }
                     }
-                }
-        } else {
-            mainView
+            } else {
+                mainView
+            }
         }
+        // MenuBarExtra(.window) sizes the popover to whatever it shows first
+        // (always the taller main view) and won't shrink it when we swap to the
+        // compact Settings view — stranding Settings, centered, in an oversized
+        // panel with empty space above and below (issue #25). Measure the live
+        // content height and nudge the panel to match it on every swap.
+        .background(
+            GeometryReader { proxy in
+                WindowFitter(targetHeight: proxy.size.height)
+            }
+        )
     }
 
     private var mainView: some View {
@@ -324,6 +337,36 @@ struct ContentView: View {
             return "Updated \(minutes)m ago"
         } else {
             return "Updated at \(Self.lastUpdatedTimeFormatter.string(from: lastUpdated))"
+        }
+    }
+}
+
+/// Resizes the hosting MenuBarExtra panel to a target content height, keeping
+/// its top edge anchored under the menu bar. Works around MenuBarExtra(.window)
+/// not shrinking its panel when the SwiftUI content becomes shorter (e.g. main
+/// view → Settings). `targetHeight` comes from a GeometryReader measuring the
+/// live content, so it reflects the ideal height of whichever view is showing.
+private struct WindowFitter: NSViewRepresentable {
+    var targetHeight: CGFloat
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        let height = targetHeight
+        guard height > 1 else { return }
+        // Defer to the next runloop tick so the panel exists and AppKit has
+        // finished the current layout pass before we override the frame.
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            let frame = window.frame
+            guard abs(frame.height - height) > 0.5 else { return }
+            window.setFrame(
+                NSRect(x: frame.origin.x,
+                       y: frame.maxY - height,
+                       width: frame.width,
+                       height: height),
+                display: true
+            )
         }
     }
 }
