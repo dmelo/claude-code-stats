@@ -73,7 +73,8 @@ private let cacheWrite5mMultiplier = 1.25
 private let cacheWrite1hMultiplier = 2.00
 
 /// Day rollups older than this are dropped from the cache. Must exceed the
-/// longest window we report (month-to-date, and the chart) with room to spare.
+/// longest window we report (the last-30-days total and the chart, both
+/// `chartWindowDays`) with room to spare.
 private let retentionDays = 100
 
 /// Days of history the chart plots, counting back from today.
@@ -411,12 +412,14 @@ actor CostService {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let weekStart = calendar.date(byAdding: .day, value: -6, to: today) ?? today
-        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) ?? today
+        // Rolling 30-day window, sharing the chart's span so the "Last 30 days"
+        // total is exactly the sum of the bars plotted below it.
+        let last30Start = calendar.date(byAdding: .day, value: -(chartWindowDays - 1), to: today) ?? today
 
         var todayTotal = 0.0
         var weekTotal = 0.0
-        var monthTotal = 0.0
-        var monthByModel: [String: Double] = [:]
+        var last30Total = 0.0
+        var last30ByModel: [String: Double] = [:]
         var totalByDay: [String: Double] = [:]
 
         for (day, rollup) in cache.days {
@@ -426,9 +429,9 @@ actor CostService {
                 totalByDay[day, default: 0] += entry.cost
                 if date >= today { todayTotal += entry.cost }
                 if date >= weekStart { weekTotal += entry.cost }
-                if date >= monthStart {
-                    monthTotal += entry.cost
-                    monthByModel[entry.model, default: 0] += entry.cost
+                if date >= last30Start {
+                    last30Total += entry.cost
+                    last30ByModel[entry.model, default: 0] += entry.cost
                 }
             }
         }
@@ -445,8 +448,8 @@ actor CostService {
         return SpendData(
             today: todayTotal,
             week: weekTotal,
-            month: monthTotal,
-            monthByModel: monthByModel
+            last30: last30Total,
+            last30ByModel: last30ByModel
                 .map { ModelSpend(model: $0.key, cost: $0.value) }
                 .sorted { $0.cost > $1.cost },
             daily: daily,

@@ -18,7 +18,7 @@ struct RTKSavingsCardView: View {
 
             row("Today", savings.todaySaved, floor: savings.todayFloor, ceiling: savings.todayCeiling)
             row("Last 7 days", savings.weekSaved, floor: savings.weekFloor, ceiling: savings.weekCeiling)
-            row("Month to date", savings.monthSaved, floor: savings.monthFloor, ceiling: savings.monthCeiling)
+            row("Last 30 days", savings.last30Saved, floor: savings.last30Floor, ceiling: savings.last30Ceiling)
 
             Divider()
                 .background(Theme.divider)
@@ -109,7 +109,7 @@ struct RTKSavingsCardView: View {
     RTKSavingsCardView(savings: RTKSavings(
         todaySaved: 42_842,
         weekSaved: 31_819_035,
-        monthSaved: 45_659_821,
+        last30Saved: 45_659_821,
         lifetimeSaved: 79_609_145,
         lifetimeRaw: 115_000_000,
         commandCount: 19_574,

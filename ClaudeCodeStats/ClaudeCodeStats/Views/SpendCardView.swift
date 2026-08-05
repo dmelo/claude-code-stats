@@ -18,7 +18,7 @@ struct SpendCardView: View {
 
             row("Today", spend.today)
             row("Last 7 days", spend.week)
-            row("Month to date", spend.month)
+            row("Last 30 days", spend.last30)
 
             if !spend.daily.isEmpty {
                 Divider()
@@ -27,11 +27,11 @@ struct SpendCardView: View {
                 SpendChartView(daily: spend.daily)
             }
 
-            if !spend.monthByModel.isEmpty {
+            if !spend.last30ByModel.isEmpty {
                 Divider()
                     .background(Theme.divider)
 
-                ForEach(spend.monthByModel) { entry in
+                ForEach(spend.last30ByModel) { entry in
                     HStack {
                         Text(entry.model)
                             .font(.system(size: 10))
@@ -78,8 +78,8 @@ struct SpendCardView: View {
     return SpendCardView(spend: SpendData(
         today: 179.60,
         week: 1301.38,
-        month: 3778.49,
-        monthByModel: [
+        last30: 3778.49,
+        last30ByModel: [
             ModelSpend(model: "Fable 5", cost: 1933.21),
             ModelSpend(model: "Opus 4.8", cost: 1698.25),
             ModelSpend(model: "Sonnet 5", cost: 145.61),
