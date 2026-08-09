@@ -99,7 +99,7 @@ extension Double {
 struct RTKSavings {
     let todaySaved: Int
     let weekSaved: Int
-    let monthSaved: Int
+    let last30Saved: Int
     let lifetimeSaved: Int
     /// Raw pre-filter tokens across all routed commands — the denominator for the
     /// average reduction. This is what RTK calls "input": the command's full
@@ -133,10 +133,10 @@ struct RTKSavings {
     // re-billing it would have incurred unfiltered. Truth sits between.
     var todayFloor: Double { Double(todaySaved) / 1_000_000 * inputRate }
     var weekFloor: Double { Double(weekSaved) / 1_000_000 * inputRate }
-    var monthFloor: Double { Double(monthSaved) / 1_000_000 * inputRate }
+    var last30Floor: Double { Double(last30Saved) / 1_000_000 * inputRate }
     var todayCeiling: Double { todayFloor * ceilingMultiplier }
     var weekCeiling: Double { weekFloor * ceilingMultiplier }
-    var monthCeiling: Double { monthFloor * ceilingMultiplier }
+    var last30Ceiling: Double { last30Floor * ceilingMultiplier }
 }
 
 extension Int {
@@ -173,8 +173,8 @@ struct DailySpend: Identifiable {
 struct SpendData {
     let today: Double
     let week: Double
-    let month: Double
-    let monthByModel: [ModelSpend]
+    let last30: Double
+    let last30ByModel: [ModelSpend]
     /// Rolling window ending today, oldest first.
     let daily: [DailySpend]
     let lastUpdated: Date

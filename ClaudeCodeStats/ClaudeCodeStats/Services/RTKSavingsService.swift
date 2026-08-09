@@ -28,7 +28,7 @@ actor RTKSavingsService {
         FileManager.default.fileExists(atPath: dbPath)
     }
 
-    /// Rolls up saved tokens over today / last 7 days / month-to-date plus a
+    /// Rolls up saved tokens over today / last 7 days / last 30 days plus a
     /// lifetime total. Returns `nil` when RTK isn't installed, the database can't
     /// be read, or it holds no commands yet — all of which just hide the card.
     func fetch() async -> RTKSavings? {
@@ -54,7 +54,7 @@ actor RTKSavingsService {
         // Wait out a transient writer lock rather than failing the whole refresh.
         sqlite3_busy_timeout(db, 2000)
 
-        let (today, week, month) = Self.windowBoundaries()
+        let (today, week, last30) = Self.windowBoundaries()
 
         // Timestamps are stored as UTC ISO8601 with a `+00:00` suffix and
         // microsecond precision. Comparing the first 19 characters
@@ -83,7 +83,7 @@ actor RTKSavingsService {
 
         sqlite3_bind_text(stmt, 1, today, -1, Self.transient)
         sqlite3_bind_text(stmt, 2, week, -1, Self.transient)
-        sqlite3_bind_text(stmt, 3, month, -1, Self.transient)
+        sqlite3_bind_text(stmt, 3, last30, -1, Self.transient)
 
         guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
 
@@ -103,7 +103,7 @@ actor RTKSavingsService {
         return RTKSavings(
             todaySaved: nonNegative(0),
             weekSaved: nonNegative(1),
-            monthSaved: nonNegative(2),
+            last30Saved: nonNegative(2),
             lifetimeSaved: nonNegative(3),
             lifetimeRaw: nonNegative(4),
             commandCount: count,
@@ -118,13 +118,14 @@ actor RTKSavingsService {
     /// Boundaries are computed in the user's local calendar (a "day" here means
     /// their local day, not the UTC day RTK stamps) and rendered as
     /// UTC-to-the-second strings to compare against the stored timestamps. Mirrors
-    /// CostService's windows: "last 7 days" is today plus the six days before it.
-    private static func windowBoundaries() -> (today: String, week: String, month: String) {
+    /// CostService's windows: "last 7 days" is today plus the six days before it,
+    /// "last 30 days" today plus the 29 before it.
+    private static func windowBoundaries() -> (today: String, week: String, last30: String) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let week = calendar.date(byAdding: .day, value: -6, to: today) ?? today
-        let month = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) ?? today
-        return (boundary(today), boundary(week), boundary(month))
+        let last30 = calendar.date(byAdding: .day, value: -29, to: today) ?? today
+        return (boundary(today), boundary(week), boundary(last30))
     }
 
     private static let boundaryFormatter: DateFormatter = {
