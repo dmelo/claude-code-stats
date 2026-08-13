@@ -14,6 +14,17 @@ class OAuthUsageService {
     private let appKeychainService = "ClaudeCodeStats-credentials"
     private let appKeychainAccount = "oauth-token"
     private var cachedCredential: Credential?
+    // Outcome of the last sweep that turned up no usable credential, expired
+    // stand-in included. Such a sweep costs a file read plus two
+    // SecItemCopyMatching calls, one of them against the CLI's item — the
+    // prompt-capable read the app cache exists to avoid — and cachedCredential
+    // cannot absorb it, because its gate is isUsable and so never matches a
+    // lapsed token. hasCredentials is evaluated inside SwiftUI bodies that re-run
+    // on every redraw, so without this the all-expired and signed-out states both
+    // mean unbounded keychain traffic. Reusing the outcome for a short window
+    // bounds that while still picking up a rotation promptly.
+    private var lastUnusableSweep: (credential: Credential?, at: Date)?
+    private let unusableSweepReuseWindow: TimeInterval = 30
     private let session: URLSession
 
     // An OAuth access token plus the expiry the CLI recorded for it. Tracking
@@ -99,38 +110,74 @@ class OAuthUsageService {
             return cached.token
         }
 
+        // A sweep that just came up empty stands in for repeating it; see
+        // lastUnusableSweep. Its credential is nil when no source held a token at
+        // all, which is as much a result worth reusing as an expired one.
+        if let sweep = lastUnusableSweep,
+           -sweep.at.timeIntervalSinceNow < unusableSweepReuseWindow {
+            return sweep.credential?.token
+        }
+
         // Live file source (present on some setups). Authoritative and cheap to
-        // read with no prompt, so use it whenever readable — the isUsable gate is
-        // only for caches, which we skip in order to fall through to a live source
-        // like this one. Gating it here could bypass a valid near-expiry file token
-        // for a staler cache, a keychain prompt, or a false "no credentials".
-        if let cred = readCredentialFromFile() {
-            cachedCredential = cred
+        // read with no prompt, so it stays ahead of the keychain — but only while
+        // it is usable. A CLI that rotates its keychain copy and stops rewriting
+        // the file leaves a permanently expired token here, and taking it
+        // unconditionally would pin us to it for good: the fresher keychain
+        // source below is never reached, and because a rotated-away token answers
+        // 429 rather than 401, the failure is indistinguishable from a real rate
+        // limit, so nothing self-heals.
+        let fileCredential = readCredentialFromFile()
+        if let cred = fileCredential, cred.isUsable {
+            adopt(cred)
             return cred.token
         }
 
         // App-owned keychain cache — avoids repeated permission prompts on the
         // CLI's item. Trust it only while unexpired; a token that has rotated out
         // is skipped so we fall through and re-read the live source below.
-        if let cred = readCredentialFromAppKeychain(), cred.isUsable {
-            cachedCredential = cred
+        let appCacheCredential = readCredentialFromAppKeychain()
+        if let cred = appCacheCredential, cred.isUsable {
+            adopt(cred)
             return cred.token
         }
 
         // Live keychain source owned by the Claude Code CLI. Re-reading here is
         // what picks up a token the CLI has rotated; cache the result (in the new
-        // format, with expiry) so we don't prompt on every fetch.
-        if let cred = readCredentialFromKeychain(service: keychainService) {
+        // format, with expiry) so we don't prompt on every fetch. It sits after
+        // the app cache, as it already did, so a usable cache still spares us the
+        // prompt.
+        let keychainCredential = readCredentialFromKeychain(service: keychainService)
+        if let cred = keychainCredential, cred.isUsable {
             saveCredentialToAppKeychain(cred)
-            cachedCredential = cred
+            adopt(cred)
             return cred.token
         }
 
-        return nil
+        // Nothing is unexpired, so send the token that lapsed most recently
+        // rather than claiming we have no credentials — signed in with a stale
+        // token is not the same as signed out, and a request that fails tells the
+        // user more than a false "not signed in" would. The app cache is a
+        // candidate alongside the live sources: when a live read starts failing
+        // (a denied prompt, a renamed item) it can hold the newest token we ever
+        // saw, and leaving it out would resurrect the very "no credentials" claim
+        // this pass exists to avoid.
+        let expired: [Credential] = [fileCredential, appCacheCredential, keychainCredential]
+            .compactMap { $0 }
+        let fallback = expired.max(by: { ($0.expiresAt ?? .distantPast) < ($1.expiresAt ?? .distantPast) })
+        lastUnusableSweep = (fallback, Date())
+        return fallback?.token
+    }
+
+    // Take a live credential into the in-memory cache. Any record of a sweep that
+    // found nothing usable is stale the moment one does turn up.
+    private func adopt(_ credential: Credential) {
+        cachedCredential = credential
+        lastUnusableSweep = nil
     }
 
     private func clearTokenCaches() {
         cachedCredential = nil
+        lastUnusableSweep = nil
         deleteAppKeychainItem()
     }
 
