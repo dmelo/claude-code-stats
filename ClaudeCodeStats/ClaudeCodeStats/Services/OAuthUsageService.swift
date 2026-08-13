@@ -54,11 +54,14 @@ class OAuthUsageService {
     }
 
     var hasCredentials: Bool {
-        readAccessToken() != nil
+        readCredential() != nil
     }
 
     func fetchUsage() async throws -> WebUsageData {
-        guard let token = readAccessToken() else {
+        // Carry the whole credential, not just its string: whether we knew the
+        // token was lapsed when we sent it is what lets us read a 429 correctly
+        // below.
+        guard let credential = readCredential() else {
             throw UsageError.noCredentials
         }
 
@@ -70,7 +73,7 @@ class OAuthUsageService {
         request.httpMethod = "GET"
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(credential.token)", forHTTPHeaderField: "Authorization")
 
         let (data, response): (Data, URLResponse)
         do {
@@ -90,10 +93,23 @@ class OAuthUsageService {
             throw UsageError.tokenExpired
         }
 
-        // The usage endpoint has its own rate limit (HTTP 429 with a long
-        // retry-after and no usage body). Surface it distinctly so the UI keeps
-        // showing the last known data and recovers on the next scheduled poll.
+        // 429 covers two unrelated conditions here. The endpoint has its own rate
+        // limit (a long retry-after and no usage body), and it also answers a
+        // rotated-away token with the same status and the same rate_limit_error
+        // body — it never returns 401 for that, which is why the 401/403 branch
+        // above can't catch it. The status alone therefore can't separate them,
+        // but our own bookkeeping can: readCredential() hands back a lapsed token
+        // only when no source has a live one, and such a request was doomed
+        // before it was sent. Reporting that as a rate limit tells the user to
+        // wait for something that cannot clear on its own — re-authenticating is
+        // what actually fixes it.
         if httpResponse.statusCode == 429 {
+            if !credential.isUsable {
+                clearTokenCaches()
+                throw UsageError.tokenExpired
+            }
+            // Genuinely throttled. Surface it distinctly so the UI keeps showing
+            // the last known data and recovers on the next scheduled poll.
             throw UsageError.rateLimited
         }
 
@@ -104,10 +120,14 @@ class OAuthUsageService {
         return try parseUsage(data)
     }
 
-    private func readAccessToken() -> String? {
+    // Returns the credential to authenticate with, or nil when no source holds a
+    // token at all. The result can be a lapsed credential — see the last-resort
+    // pass below — so callers that care must check isUsable rather than assume a
+    // returned credential is live.
+    private func readCredential() -> Credential? {
         // In-memory cache, but only while the token is still fresh.
         if let cached = cachedCredential, cached.isUsable {
-            return cached.token
+            return cached
         }
 
         // A sweep that just came up empty stands in for repeating it; see
@@ -115,7 +135,7 @@ class OAuthUsageService {
         // all, which is as much a result worth reusing as an expired one.
         if let sweep = lastUnusableSweep,
            -sweep.at.timeIntervalSinceNow < unusableSweepReuseWindow {
-            return sweep.credential?.token
+            return sweep.credential
         }
 
         // Live file source (present on some setups). Authoritative and cheap to
@@ -129,7 +149,7 @@ class OAuthUsageService {
         let fileCredential = readCredentialFromFile()
         if let cred = fileCredential, cred.isUsable {
             adopt(cred)
-            return cred.token
+            return cred
         }
 
         // App-owned keychain cache — avoids repeated permission prompts on the
@@ -138,7 +158,7 @@ class OAuthUsageService {
         let appCacheCredential = readCredentialFromAppKeychain()
         if let cred = appCacheCredential, cred.isUsable {
             adopt(cred)
-            return cred.token
+            return cred
         }
 
         // Live keychain source owned by the Claude Code CLI. Re-reading here is
@@ -150,7 +170,7 @@ class OAuthUsageService {
         if let cred = keychainCredential, cred.isUsable {
             saveCredentialToAppKeychain(cred)
             adopt(cred)
-            return cred.token
+            return cred
         }
 
         // Nothing is unexpired, so send the token that lapsed most recently
@@ -165,7 +185,7 @@ class OAuthUsageService {
             .compactMap { $0 }
         let fallback = expired.max(by: { ($0.expiresAt ?? .distantPast) < ($1.expiresAt ?? .distantPast) })
         lastUnusableSweep = (fallback, Date())
-        return fallback?.token
+        return fallback
     }
 
     // Take a live credential into the in-memory cache. Any record of a sweep that
