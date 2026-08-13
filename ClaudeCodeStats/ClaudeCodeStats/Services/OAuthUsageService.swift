@@ -100,11 +100,15 @@ class OAuthUsageService {
         }
 
         // Live file source (present on some setups). Authoritative and cheap to
-        // read with no prompt, so use it whenever readable — the isUsable gate is
-        // only for caches, which we skip in order to fall through to a live source
-        // like this one. Gating it here could bypass a valid near-expiry file token
-        // for a staler cache, a keychain prompt, or a false "no credentials".
-        if let cred = readCredentialFromFile() {
+        // read with no prompt, so it stays ahead of the keychain — but only while
+        // it is usable. A CLI that rotates its keychain copy and stops rewriting
+        // the file leaves a permanently expired token here, and taking it
+        // unconditionally would pin us to it for good: the fresher keychain
+        // source below is never reached, and because a rotated-away token answers
+        // 429 rather than 401, the failure is indistinguishable from a real rate
+        // limit, so nothing self-heals.
+        let fileCredential = readCredentialFromFile()
+        if let cred = fileCredential, cred.isUsable {
             cachedCredential = cred
             return cred.token
         }
@@ -119,10 +123,23 @@ class OAuthUsageService {
 
         // Live keychain source owned by the Claude Code CLI. Re-reading here is
         // what picks up a token the CLI has rotated; cache the result (in the new
-        // format, with expiry) so we don't prompt on every fetch.
-        if let cred = readCredentialFromKeychain(service: keychainService) {
+        // format, with expiry) so we don't prompt on every fetch. Read after the
+        // app cache so a usable cache still spares us the prompt.
+        let keychainCredential = readCredentialFromKeychain(service: keychainService)
+        if let cred = keychainCredential, cred.isUsable {
             saveCredentialToAppKeychain(cred)
             cachedCredential = cred
+            return cred.token
+        }
+
+        // Nothing is unexpired, so send the token that lapsed most recently
+        // rather than claiming we have no credentials — signed in with a stale
+        // token is not the same as signed out, and a request that fails tells the
+        // user more than a false "not signed in" would. Deliberately not cached:
+        // leaving cachedCredential empty means the next call re-reads every
+        // source and picks up a rotation the moment one lands.
+        let expired: [Credential] = [fileCredential, keychainCredential].compactMap { $0 }
+        if let cred = expired.max(by: { ($0.expiresAt ?? .distantPast) < ($1.expiresAt ?? .distantPast) }) {
             return cred.token
         }
 
