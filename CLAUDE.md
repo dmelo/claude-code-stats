@@ -11,17 +11,33 @@ cd ClaudeCodeStats
 xcodebuild -scheme ClaudeCodeStats -configuration Release build
 ```
 
-The built `.app` is in `~/Library/Developer/Xcode/DerivedData/ClaudeCodeStats-*/Build/Products/Release/`.
+The built `.app` is in `~/Library/Developer/Xcode/DerivedData/ClaudeCodeStats-<hash>/Build/Products/Release/`.
+
+**Resolve that path explicitly — never with a `ClaudeCodeStats-*` glob.** Xcode keeps a
+separate DerivedData directory per project location, and stale ones are not cleaned up. When
+more than one exists the glob expands to all of them, so `cp -R src1 src2 /Applications/`
+copies the fresh build and then **overwrites it with the stale one**, exit 0 and no warning —
+you end up debugging a binary that is weeks old. `ls -dt` does not save you either: it sorts
+by directory mtime, which a previous `cp` will have touched. The last line `xcodebuild` prints
+(`lsregister -f -R -trusted <path>`) names the directory it actually built into.
 
 To install locally:
 
 ```bash
+# Take the path from xcodebuild's own output, or pick by the *binary's* mtime:
+APP=$(ls -dt ~/Library/Developer/Xcode/DerivedData/ClaudeCodeStats-*/Build/Products/Release/ClaudeCodeStats.app/Contents/MacOS/ClaudeCodeStats \
+      | head -1 | sed 's#/Contents/MacOS/ClaudeCodeStats##')
+echo "installing from: $APP"   # sanity-check this before continuing
+
 # Kill running instance, copy to /Applications, relaunch
 pkill -x ClaudeCodeStats; sleep 0.5
 rm -rf /Applications/ClaudeCodeStats.app
-cp -R ~/Library/Developer/Xcode/DerivedData/ClaudeCodeStats-*/Build/Products/Release/ClaudeCodeStats.app /Applications/
+cp -R "$APP" /Applications/ClaudeCodeStats.app
 open /Applications/ClaudeCodeStats.app
 ```
+
+If a change you just made doesn't show up, check this first: a rendered colour or string that
+exists nowhere in the source tree means you are not running the tree.
 
 There are no tests or linters configured, so verifying a change means running the app and looking at it. Three non-obvious traps when doing that from a shell:
 
