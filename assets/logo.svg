@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    Source of truth for the app icon. See scripts/generate-icon.sh.
+
+    ONE file for every size, 16 px to 1024 px. An earlier draft put spend bars
+    inside the ring, which forced a second simplified source and a size
+    threshold in the generator, because at 16 px the bars rendered as a smear
+    about three pixels wide that read as dirt on the icon. Rendering the bare
+    ring at 16 px is clean, so the second file and the threshold are gone.
+    Adding interior detail back means bringing both of them back: check it at
+    16 px before you do.
+
+    PALETTE - deliberately NOT the severity ramp in Theme.swift.
+    Do not "sync" these to it. Theme's ramp is functional: it is driven by
+    contrast and colour-blind separation, and it changes whenever that work
+    does. This is identity, and it should hold still. Keeping them apart is
+    the point, not an oversight.
+
+    These are Anthropic's own brand values, as a nod to what the app reports
+    on, read off anthropic.com's markup:
+      #FAF9F5  cream, light      #D97757  terracotta (the accent)
+      #EDEAE0  cream, deep       #C6C4BA  warm grey, border
+      #141413  near-black
+
+    Authored at 1024 with the macOS squircle and its margin baked in: macOS
+    does not mask app icons the way iOS does, so the artwork has to sit in an
+    824x824 body inside the 1024 canvas or it renders oversized in Finder.
+  -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAF9F5"/>
+      <stop offset="1" stop-color="#EDEAE0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Body. The border is load-bearing, not decoration: on a white Finder
+       background a cream icon has almost no silhouette without it. -->
+  <rect x="100" y="100" width="824" height="824" rx="185.4" ry="185.4" fill="url(#body)"/>
+  <rect x="103" y="103" width="818" height="818" rx="182.4" ry="182.4"
+        fill="none" stroke="#C6C4BA" stroke-width="6"/>
+
+  <!-- Usage ring: the same motif the menu bar draws. Stroke width is the one
+       dial worth touching here; 80 keeps the counter open at 1024 while still
+       reading at 16. -->
+  <circle cx="512" cy="512" r="272" fill="none" stroke="#141413" stroke-opacity="0.13" stroke-width="80"/>
+  <circle cx="512" cy="512" r="272" fill="none" stroke="#D97757" stroke-width="80"
+          stroke-linecap="round" stroke-dasharray="1240 469"
+          transform="rotate(-90 512 512)"/>
+
+  <!-- Centre dot, in the accent so the mark stays monochrome. It fills a
+       counter that otherwise reads as dead space at large sizes.
+
+       The radius is tied to the fill and is not free: terracotta on this cream
+       is about 2.7:1, where a near-black dot was about 15.9:1, so it needs
+       noticeably more mass to carry the same presence. At the radius that
+       suited black (62) this dot looks timid, and at 16 px it nearly
+       disappears. Re-tune the radius if you ever change the fill.
+
+       It must also stay solid and radially symmetric: an off-centre or
+       directional shape here smears at 16 px, which is how an earlier set of
+       spend bars and an up-chevron both died. -->
+  <circle cx="512" cy="512" r="80" fill="#D97757"/>
+</svg>

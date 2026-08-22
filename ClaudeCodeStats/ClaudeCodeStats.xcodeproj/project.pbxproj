@@ -25,6 +25,7 @@
 		A21 /* SpendChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B23 /* SpendChartView.swift */; };
 		A22 /* RTKSavingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24 /* RTKSavingsService.swift */; };
 		A23 /* RTKSavingsCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25 /* RTKSavingsCardView.swift */; };
+		A24 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B26 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +35,7 @@
 		B07 /* UsageCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageCardView.swift; sourceTree = "<group>"; };
 		B08 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B09 /* ClaudeCodeStats.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ClaudeCodeStats.entitlements; sourceTree = "<group>"; };
+		B26 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B12 /* OAuthUsageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthUsageService.swift; sourceTree = "<group>"; };
 		B13 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B14 /* StatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusService.swift; sourceTree = "<group>"; };
@@ -81,6 +83,7 @@
 				B17 /* UsageViewModel.swift */,
 				G04 /* Services */,
 				G05 /* Views */,
+				B26 /* Assets.xcassets */,
 				B08 /* Info.plist */,
 				B09 /* ClaudeCodeStats.entitlements */,
 			);
@@ -179,6 +182,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A24 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -335,7 +339,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -363,7 +366,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
