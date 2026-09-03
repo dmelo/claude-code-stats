@@ -67,8 +67,12 @@ private struct ModelPrice {
 
 /// Fable 5.1 and Mythos 5.1: the standard 10/50 with cache reads at a quarter of
 /// what the rest of the table pays for them — $0.25 rather than $1 per million.
-/// Cache reads dominate the token mix in a long Claude Code session, so applying
-/// the shared 0.1× here would overstate their spend severalfold.
+///
+/// The 4× is on the cache-read component alone; what it does to a total depends
+/// on the entry's token mix, so it is worth stating precisely. Cache reads run
+/// to ~97% of the input-side tokens across a long Claude Code corpus, and at
+/// that mix the shared 0.1× overstates the total by about 1.7× — a large error,
+/// but not the "severalfold" an earlier draft of this comment claimed.
 private let cheapCacheReadRate = Rate(
     input: 10, output: 50, cacheReadMultiplier: discountedCacheReadMultiplier)
 
