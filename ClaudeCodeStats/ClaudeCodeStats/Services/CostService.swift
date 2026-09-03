@@ -6,6 +6,17 @@ import Foundation
 private struct Rate {
     let input: Double
     let output: Double
+    /// What a cache read costs as a multiple of `input`. Per-model rather than a
+    /// shared constant because Fable 5.1 and Mythos 5.1 read at 0.025× while
+    /// every other model reads at 0.1× — Anthropic publishes it as an exception
+    /// to the otherwise universal multiplier, so it travels with the rate.
+    let cacheReadMultiplier: Double
+
+    init(input: Double, output: Double, cacheReadMultiplier: Double = standardCacheReadMultiplier) {
+        self.input = input
+        self.output = output
+        self.cacheReadMultiplier = cacheReadMultiplier
+    }
 }
 
 private struct ModelPrice {
@@ -16,6 +27,11 @@ private struct ModelPrice {
     /// Entries are priced at the rate in effect on the day they ran, so a past
     /// entry keeps the promotional rate once it lapses and later ones fall back
     /// to `standard` on their own.
+    ///
+    /// No model carries one right now — Sonnet 5's launch promotion became its
+    /// permanent price rather than lapsing. The field stays because launch
+    /// promotions recur, and it is the only thing that keeps a past entry priced
+    /// at the rate that was actually in force on the day it ran.
     let intro: (rate: Rate, until: Date)?
 
     init(display: String, standard: Rate, intro: (rate: Rate, until: Date)? = nil) {
@@ -30,35 +46,59 @@ private struct ModelPrice {
     }
 }
 
-/// Sonnet 5's introductory pricing runs through 2026-08-31, so the standard rate
-/// takes over at the following midnight.
-private let sonnet5IntroEnds: Date = {
-    var components = DateComponents()
-    components.year = 2026
-    components.month = 9
-    components.day = 1
-    components.timeZone = TimeZone(identifier: "UTC")
-    return Calendar(identifier: .gregorian).date(from: components) ?? .distantPast
-}()
-
 // Matched by prefix, not equality: some models appear in transcripts with a date
 // suffix (claude-haiku-4-5-20251001) and others bare (claude-opus-4-8). A model
 // missing from this table is skipped, which is also how the synthetic entries
 // Claude Code writes for local errors ("<synthetic>") stay out of the total.
+//
+// The rows mirror Claude Code's own baked model catalogue, which is the
+// authority for what can land in a transcript in the first place. Enumerating
+// from it rather than from the models seen so far is what turned up the Mythos
+// family and the retired 4.x ids, none of which this table had ever heard of.
+// Anthropic's published pricing agrees with that catalogue rate for rate, both
+// checked 2026-09-03.
+//
+// Sorted by descending prefix length so the longest match wins wherever a row is
+// written. First-match ordering is a live trap, not a hypothetical one:
+// "claude-fable-5" is itself a prefix of "claude-fable-5-1", so Fable 5.1 was
+// being priced and labelled as Fable 5 — quietly wrong, rather than skipped the
+// way a genuinely unknown model is. "claude-opus-4" carries the same hazard over
+// the five 4.x rows below it, and "claude-sonnet-4" over two.
 private let priceTable: [(prefix: String, price: ModelPrice)] = [
+    // Fable and Mythos are the same model under two names, hence the same rates.
+    ("claude-fable-5-1", ModelPrice(display: "Fable 5.1", standard: cheapCacheReadRate)),
+    ("claude-mythos-5-1", ModelPrice(display: "Mythos 5.1", standard: cheapCacheReadRate)),
+    ("claude-fable-5", ModelPrice(display: "Fable 5", standard: Rate(input: 10, output: 50))),
+    ("claude-mythos-5", ModelPrice(display: "Mythos 5", standard: Rate(input: 10, output: 50))),
+
     ("claude-opus-5", ModelPrice(display: "Opus 5", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-8", ModelPrice(display: "Opus 4.8", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-7", ModelPrice(display: "Opus 4.7", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-6", ModelPrice(display: "Opus 4.6", standard: Rate(input: 5, output: 25))),
-    ("claude-fable-5", ModelPrice(display: "Fable 5", standard: Rate(input: 10, output: 50))),
-    ("claude-sonnet-5", ModelPrice(
-        display: "Sonnet 5",
-        standard: Rate(input: 3, output: 15),
-        intro: (Rate(input: 2, output: 10), sonnet5IntroEnds)
-    )),
+    ("claude-opus-4-5", ModelPrice(display: "Opus 4.5", standard: Rate(input: 5, output: 25))),
+    ("claude-opus-4-1", ModelPrice(display: "Opus 4.1", standard: Rate(input: 15, output: 75))),
+    ("claude-opus-4", ModelPrice(display: "Opus 4", standard: Rate(input: 15, output: 75))),
+
+    // Sonnet 5 launched at 2/10 "through 2026-08-31"; Anthropic then made that
+    // the standard price and cancelled the increase to 3/15. Carrying it as a
+    // promotion that lapsed would have started overcharging it 50% on 09-01.
+    ("claude-sonnet-5", ModelPrice(display: "Sonnet 5", standard: Rate(input: 2, output: 10))),
     ("claude-sonnet-4-6", ModelPrice(display: "Sonnet 4.6", standard: Rate(input: 3, output: 15))),
+    ("claude-sonnet-4-5", ModelPrice(display: "Sonnet 4.5", standard: Rate(input: 3, output: 15))),
+    ("claude-sonnet-4", ModelPrice(display: "Sonnet 4", standard: Rate(input: 3, output: 15))),
+    ("claude-3-7-sonnet", ModelPrice(display: "Sonnet 3.7", standard: Rate(input: 3, output: 15))),
+    ("claude-3-5-sonnet", ModelPrice(display: "Sonnet 3.5", standard: Rate(input: 3, output: 15))),
+
     ("claude-haiku-4-5", ModelPrice(display: "Haiku 4.5", standard: Rate(input: 1, output: 5))),
-]
+    ("claude-3-5-haiku", ModelPrice(display: "Haiku 3.5", standard: Rate(input: 0.8, output: 4))),
+].sorted { $0.prefix.count > $1.prefix.count }
+
+/// Fable 5.1 and Mythos 5.1: the standard 10/50 with cache reads at a quarter of
+/// what the rest of the table pays for them — $0.25 rather than $1 per million.
+/// Cache reads dominate the token mix in a long Claude Code session, so applying
+/// the shared 0.1× here would overstate their spend severalfold.
+private let cheapCacheReadRate = Rate(
+    input: 10, output: 50, cacheReadMultiplier: discountedCacheReadMultiplier)
 
 private func price(for model: String) -> ModelPrice? {
     priceTable.first { model.hasPrefix($0.prefix) }?.price
@@ -68,7 +108,12 @@ private func price(for model: String) -> ModelPrice? {
 // rate. The two write tiers are priced differently and a single transcript entry
 // can use either, so they have to be read separately from the `cache_creation`
 // object — collapsing them into one multiplier misprices every entry.
-private let cacheReadMultiplier = 0.10
+//
+// The write multipliers really are universal: every tier in the catalogue pays
+// 1.25× and 2×. Reads are not, which is why a rate carries its own read
+// multiplier and these two do not — see `Rate.cacheReadMultiplier`.
+private let standardCacheReadMultiplier = 0.10
+private let discountedCacheReadMultiplier = 0.025
 private let cacheWrite5mMultiplier = 1.25
 private let cacheWrite1hMultiplier = 2.00
 
@@ -96,7 +141,13 @@ private let chartWindowDays = 30
 /// 8: added Opus 5 to the price table. It shipped as a new prefix the table had
 /// never seen, so every Opus 5 entry was skipped outright rather than mispriced —
 /// silently omitting the model from spend since it started being used.
-private let cacheVersion = 8
+/// 9: rebuilt the price table from Claude Code's model catalogue. Three separate
+/// repricings, each of which needs history re-scanned: Fable 5.1 and Mythos 5.1
+/// read cache at 0.025× rather than 0.1×; Fable 5.1 was matching the
+/// "claude-fable-5" row and being priced and labelled as Fable 5; and Sonnet 5's
+/// launch rate became permanent, so entries from 2026-09-01 on were being billed
+/// at 3/15 instead of 2/10.
+private let cacheVersion = 9
 
 private struct EntryCost: Codable {
     let model: String
@@ -341,7 +392,7 @@ actor CostService {
 
         var total = tokens(usage, "input_tokens") * input
         total += tokens(usage, "output_tokens") * output
-        total += tokens(usage, "cache_read_input_tokens") * input * cacheReadMultiplier
+        total += tokens(usage, "cache_read_input_tokens") * input * rate.cacheReadMultiplier
 
         if let creation = usage["cache_creation"] as? [String: Any] {
             total += tokens(creation, "ephemeral_5m_input_tokens") * input * cacheWrite5mMultiplier
@@ -378,7 +429,10 @@ actor CostService {
 
     /// The multiple of the input rate a tool-output token would have cost had RTK
     /// *not* filtered it from context: a cache write (`cacheWrite5mMultiplier`)
-    /// plus this account's observed re-reads (`cacheReadMultiplier × ρ`). The RTK
+    /// plus this account's observed re-reads (`standardCacheReadMultiplier × ρ`).
+    /// The standard multiplier, to match `representativeInputRate`'s Opus 4.8 —
+    /// pairing Opus's input rate with Fable 5.1's cheaper reads would value the
+    /// tokens at a blend no model actually charges. The RTK
     /// card's floor prices saved tokens at 1× input; this is the ceiling. ρ is a
     /// corpus average, so it's inflated by always-present tokens (the system
     /// prompt is re-read every turn) — fitting for an optimistic upper bound.
@@ -386,7 +440,7 @@ actor CostService {
     func contextRebillingCeiling() -> Double {
         guard cache.establishedTokens > 0 else { return cacheWrite5mMultiplier }
         let rho = Double(cache.cacheReadTokens) / Double(cache.establishedTokens)
-        return cacheWrite5mMultiplier + cacheReadMultiplier * rho
+        return cacheWrite5mMultiplier + standardCacheReadMultiplier * rho
     }
 
     // MARK: - Aggregation
