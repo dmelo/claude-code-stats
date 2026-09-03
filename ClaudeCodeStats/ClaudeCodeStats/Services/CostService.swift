@@ -77,12 +77,19 @@ private let cheapCacheReadRate = Rate(
 // missing from this table is skipped, which is also how the synthetic entries
 // Claude Code writes for local errors ("<synthetic>") stay out of the total.
 //
-// The rows mirror Claude Code's own baked model catalogue, which is the
-// authority for what can land in a transcript in the first place. Enumerating
-// from it rather than from the models seen so far is what turned up the Mythos
-// family and the retired 4.x ids, none of which this table had ever heard of.
-// Anthropic's published pricing agrees with that catalogue rate for rate, both
-// checked 2026-09-03.
+// The rows mirror the *first-party* ids in Claude Code's own baked model
+// catalogue, which is the authority for what can land in a transcript in the
+// first place. Enumerating from it rather than from the models seen so far is
+// what turned up the Mythos family and the retired 4.x ids, none of which this
+// table had ever heard of. Anthropic's published pricing agrees with that
+// catalogue rate for rate, both checked 2026-09-03.
+//
+// The catalogue also carries Bedrock ids ("us.anthropic.claude-opus-4-5-…"),
+// which none of these prefixes match. That is untested rather than deliberate:
+// this app reads spend for an account authenticated by OAuth, so a Bedrock-only
+// setup has no usage to show it in the first place, and adding a normalisation
+// nothing here can exercise would be guessing. Vertex needs nothing — its
+// "claude-opus-4-5@20251101" still prefix-matches.
 //
 // Sorted by descending prefix length so the longest match wins wherever a row is
 // written. First-match ordering is a live trap, not a hypothetical one:
@@ -103,7 +110,14 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     ("claude-opus-4-6", ModelPrice(display: "Opus 4.6", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-5", ModelPrice(display: "Opus 4.5", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-1", ModelPrice(display: "Opus 4.1", standard: Rate(input: 15, output: 75))),
-    ("claude-opus-4", ModelPrice(display: "Opus 4", standard: Rate(input: 15, output: 75))),
+    // Both spellings of the original Opus 4, and deliberately not a bare
+    // "claude-opus-4": that would be a catch-all for every 4.x yet to ship,
+    // pricing a future claude-opus-4-9 at the retired 15/75 and labelling it
+    // "Opus 4" — reintroducing one row down exactly the silent mispricing this
+    // table was rebuilt to stop. Narrow prefixes keep an unrecognised model
+    // falling through to nil, where it is visibly absent rather than wrong.
+    ("claude-opus-4-0", ModelPrice(display: "Opus 4", standard: Rate(input: 15, output: 75))),
+    ("claude-opus-4-2025", ModelPrice(display: "Opus 4", standard: Rate(input: 15, output: 75))),
 
     // Sonnet 5 launched at 2/10 "through 2026-08-31"; Anthropic then made that
     // the standard price and cancelled the increase to 3/15. Carrying it as a
@@ -111,7 +125,8 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     ("claude-sonnet-5", ModelPrice(display: "Sonnet 5", standard: Rate(input: 2, output: 10))),
     ("claude-sonnet-4-6", ModelPrice(display: "Sonnet 4.6", standard: Rate(input: 3, output: 15))),
     ("claude-sonnet-4-5", ModelPrice(display: "Sonnet 4.5", standard: Rate(input: 3, output: 15))),
-    ("claude-sonnet-4", ModelPrice(display: "Sonnet 4", standard: Rate(input: 3, output: 15))),
+    ("claude-sonnet-4-0", ModelPrice(display: "Sonnet 4", standard: Rate(input: 3, output: 15))),
+    ("claude-sonnet-4-2025", ModelPrice(display: "Sonnet 4", standard: Rate(input: 3, output: 15))),
     ("claude-3-7-sonnet", ModelPrice(display: "Sonnet 3.7", standard: Rate(input: 3, output: 15))),
     ("claude-3-5-sonnet", ModelPrice(display: "Sonnet 3.5", standard: Rate(input: 3, output: 15))),
 
