@@ -3,6 +3,25 @@ import Foundation
 // Claude Code's transcripts record token counts but never a cost, so spend is
 // always derived here from a price table. Rates are US dollars per million
 // tokens.
+
+// Cache-read and cache-write tokens bill at a multiple of the model's input
+// rate. The two write tiers are priced differently and a single transcript entry
+// can use either, so they have to be read separately from the `cache_creation`
+// object — collapsing them into one multiplier misprices every entry.
+//
+// The write multipliers really are universal: every tier in the catalogue pays
+// 1.25× and 2×. Reads are not, which is why a rate carries its own read
+// multiplier and these two do not — see `Rate.cacheReadMultiplier`.
+//
+// Declared ahead of everything that reads them. File-scope constants are
+// order-independent in Swift, so this is for the reader rather than the
+// compiler: the table below is a wall of numbers, and the multipliers those
+// numbers are interpreted against should be in view before it starts.
+private let standardCacheReadMultiplier = 0.10
+private let discountedCacheReadMultiplier = 0.025
+private let cacheWrite5mMultiplier = 1.25
+private let cacheWrite1hMultiplier = 2.00
+
 private struct Rate {
     let input: Double
     let output: Double
@@ -45,6 +64,13 @@ private struct ModelPrice {
         return standard
     }
 }
+
+/// Fable 5.1 and Mythos 5.1: the standard 10/50 with cache reads at a quarter of
+/// what the rest of the table pays for them — $0.25 rather than $1 per million.
+/// Cache reads dominate the token mix in a long Claude Code session, so applying
+/// the shared 0.1× here would overstate their spend severalfold.
+private let cheapCacheReadRate = Rate(
+    input: 10, output: 50, cacheReadMultiplier: discountedCacheReadMultiplier)
 
 // Matched by prefix, not equality: some models appear in transcripts with a date
 // suffix (claude-haiku-4-5-20251001) and others bare (claude-opus-4-8). A model
@@ -93,29 +119,9 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     ("claude-3-5-haiku", ModelPrice(display: "Haiku 3.5", standard: Rate(input: 0.8, output: 4))),
 ].sorted { $0.prefix.count > $1.prefix.count }
 
-/// Fable 5.1 and Mythos 5.1: the standard 10/50 with cache reads at a quarter of
-/// what the rest of the table pays for them — $0.25 rather than $1 per million.
-/// Cache reads dominate the token mix in a long Claude Code session, so applying
-/// the shared 0.1× here would overstate their spend severalfold.
-private let cheapCacheReadRate = Rate(
-    input: 10, output: 50, cacheReadMultiplier: discountedCacheReadMultiplier)
-
 private func price(for model: String) -> ModelPrice? {
     priceTable.first { model.hasPrefix($0.prefix) }?.price
 }
-
-// Cache-read and cache-write tokens bill at a multiple of the model's input
-// rate. The two write tiers are priced differently and a single transcript entry
-// can use either, so they have to be read separately from the `cache_creation`
-// object — collapsing them into one multiplier misprices every entry.
-//
-// The write multipliers really are universal: every tier in the catalogue pays
-// 1.25× and 2×. Reads are not, which is why a rate carries its own read
-// multiplier and these two do not — see `Rate.cacheReadMultiplier`.
-private let standardCacheReadMultiplier = 0.10
-private let discountedCacheReadMultiplier = 0.025
-private let cacheWrite5mMultiplier = 1.25
-private let cacheWrite1hMultiplier = 2.00
 
 /// Day rollups older than this are dropped from the cache. Must exceed the
 /// longest window we report (the last-30-days total and the chart, both
