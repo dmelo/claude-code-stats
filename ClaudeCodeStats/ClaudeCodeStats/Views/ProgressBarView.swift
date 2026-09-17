@@ -5,13 +5,7 @@ struct ProgressBarView: View {
     let height: CGFloat = 8
 
     private var progressColor: Color {
-        if progress < 50 {
-            return Color(red: 74/255, green: 222/255, blue: 128/255) // Green
-        } else if progress < 75 {
-            return Color(red: 250/255, green: 204/255, blue: 21/255) // Yellow
-        } else {
-            return Color(red: 248/255, green: 113/255, blue: 113/255) // Red
-        }
+        StatusLevel(usagePercent: progress).color
     }
 
     var body: some View {

@@ -123,21 +123,22 @@ struct ClaudeCodeStatsApp: App {
 
         // Progress arc
         let clamped = max(0.0, min(progress, 100.0))
+        let level = StatusLevel(usagePercent: clamped)
         let endAngle = startAngle - CGFloat(clamped / 100.0) * 2 * .pi
-        ctx.setStrokeColor(ringColor(for: clamped).cgColor)
+        ctx.setStrokeColor(level.menuBarColor.cgColor)
         ctx.setLineWidth(lineWidth)
         ctx.setLineCap(.round)
         ctx.addArc(center: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
         ctx.strokePath()
-    }
 
-    private func ringColor(for progress: Double) -> NSColor {
-        if progress < 50 {
-            return NSColor(red: 74/255, green: 222/255, blue: 128/255, alpha: 1)
-        } else if progress < 75 {
-            return NSColor(red: 250/255, green: 204/255, blue: 21/255, alpha: 1)
-        } else {
-            return NSColor(red: 248/255, green: 113/255, blue: 113/255, alpha: 1)
+        // Every other surface pairs its colour with a number or a word; up here
+        // the ring is the whole signal, so the top step gets a shape too. The
+        // dot is readable with no colour perception at all.
+        if level == .critical {
+            let dotRadius: CGFloat = 2
+            ctx.setFillColor(level.menuBarColor.cgColor)
+            ctx.fillEllipse(in: CGRect(x: center.x - dotRadius, y: center.y - dotRadius,
+                                       width: dotRadius * 2, height: dotRadius * 2))
         }
     }
 }

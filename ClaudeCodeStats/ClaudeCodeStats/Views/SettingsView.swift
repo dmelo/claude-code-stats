@@ -58,7 +58,7 @@ struct SettingsView: View {
 
             HStack(spacing: 8) {
                 Circle()
-                    .fill(OAuthUsageService.shared.hasCredentials ? Color.green : Color.red)
+                    .fill(OAuthUsageService.shared.hasCredentials ? Theme.statusOK : Theme.statusCritical)
                     .frame(width: 8, height: 8)
 
                 Text(OAuthUsageService.shared.hasCredentials

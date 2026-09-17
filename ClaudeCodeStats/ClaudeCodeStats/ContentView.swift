@@ -174,7 +174,7 @@ struct ContentView: View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 10))
-                .foregroundColor(.orange)
+                .foregroundColor(Theme.statusWarning)
 
             Text(message)
                 .font(.system(size: 10))
@@ -191,7 +191,7 @@ struct ContentView: View {
         VStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 24))
-                .foregroundColor(.yellow)
+                .foregroundColor(Theme.statusWarning)
 
             Text(error)
                 .font(.system(size: 12))
@@ -314,7 +314,7 @@ struct ContentView: View {
         HStack(spacing: 6) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 12))
-                .foregroundColor(.green)
+                .foregroundColor(Theme.statusOK)
 
             Text(updateChecker.upToDateText)
                 .font(.system(size: 11))

@@ -9,13 +9,15 @@ struct ClaudeStatus: Codable {
     let indicator: String  // "none", "minor", "major", "critical"
     let description: String
 
+    // "major" and "critical" share the top step. Four hues in a 6pt dot was
+    // already more than the eye can separate — orange and yellow especially —
+    // and `displayText` sits right next to it saying which one it is.
     var color: Color {
         switch indicator {
-        case "none": return .green
-        case "minor": return .yellow
-        case "major": return .orange
-        case "critical": return .red
-        default: return .gray
+        case "none": return Theme.statusOK
+        case "minor": return Theme.statusWarning
+        case "major", "critical": return Theme.statusCritical
+        default: return Theme.textSecondary
         }
     }
 
