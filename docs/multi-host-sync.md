@@ -58,14 +58,15 @@ and prices them itself, so there is no ccusage to invoke and no
 Ran a signed probe `.app` that spawns `ssh`/`rsync` through `Foundation.Process`,
 the same path `CostService` would use, logging to a file.
 
-Against `solomon` (192.168.50.10, LAN), from a **Finder-launched** bundle — see
-the launch-environment trap in [../CLAUDE.md](../CLAUDE.md), the `open`-from-a-shell
-version of this test is invalid because it inherits the caller's environment:
+Against a Linux machine on the local network, from a **Finder-launched** bundle —
+see the launch-environment trap in [../CLAUDE.md](../CLAUDE.md); the
+`open`-from-a-shell version of this test is invalid, because it inherits the
+caller's environment:
 
 | Check | Result |
 |---|---|
-| `ssh -o BatchMode=yes` remote listing | exit 0, 0.24s |
-| `rsync -a --files-from=…` pull | exit 0, 3 transcripts, 9.2 MB |
+| `ssh -o BatchMode=yes` remote listing | exit 0, well under a second |
+| `rsync -a --files-from=…` pull | exit 0, every listed transcript arrived |
 | `ssh` / `rsync` resolvable on the minimal GUI `PATH` | yes — both live in `/usr/bin` |
 | `SSH_AUTH_SOCK` in the 13-variable GUI environment | present (launchd provides it) |
 | macOS Local Network TCC prompt | none blocked it, on a bundle ID never granted anything |
@@ -74,15 +75,16 @@ Notes on each:
 
 - macOS ships **openrsync** (`rsync version 2.6.9 compatible`) and it accepts
   `--files-from` as the pulling side. This was the main portability doubt.
-- The key in use (`~/.ssh/id_ed25519`) has **no passphrase**, so `BatchMode=yes`
-  needs no agent at all. `SSH_AUTH_SOCK` being present anyway means a
-  passphrase-protected key would also work.
+- `BatchMode=yes` needs no agent at all for a key with no passphrase. Since
+  `SSH_AUTH_SOCK` is present in the GUI environment regardless, a
+  passphrase-protected key held in an agent works too.
 - Spawning `/usr/bin/ssh` appears to attribute the network connection to that
   system binary rather than to the app, which is why no local-network prompt
   appeared. Re-check this if the app ever opens a LAN socket itself.
 
-Sizing, measured the same day: solomon's 31-day transcript window is
-**0.4 GB across 607 files**. Fine for both disk and a cold scan.
+Sizing, measured the same day: a month of transcripts from one active machine
+is a few hundred megabytes over several hundred files — comfortably within what
+a cold scan already handles locally, for both disk and CPU.
 
 ## The one design rule the spike produced
 
