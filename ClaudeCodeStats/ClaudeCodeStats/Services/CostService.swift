@@ -19,6 +19,9 @@ import Foundation
 // numbers are interpreted against should be in view before it starts.
 private let standardCacheReadMultiplier = 0.10
 private let discountedCacheReadMultiplier = 0.025
+/// Opus 5.5 reads at $0.20 against a $4 input rate. Its writes stay on the
+/// universal 1.25×/2× ($5 and $8).
+private let opus55CacheReadMultiplier = 0.05
 private let cacheWrite5mMultiplier = 1.25
 private let cacheWrite1hMultiplier = 2.00
 
@@ -26,9 +29,9 @@ private struct Rate {
     let input: Double
     let output: Double
     /// What a cache read costs as a multiple of `input`. Per-model rather than a
-    /// shared constant because Fable 5.1 and Mythos 5.1 read at 0.025× while
-    /// every other model reads at 0.1× — Anthropic publishes it as an exception
-    /// to the otherwise universal multiplier, so it travels with the rate.
+    /// shared constant because Fable 5.1 and Mythos 5.1 read at 0.025× and
+    /// Opus 5.5 at 0.05×, while every other model reads at 0.1× — the catalogue
+    /// gives each its own pricing tier, so the multiplier travels with the rate.
     let cacheReadMultiplier: Double
 
     init(input: Double, output: Double, cacheReadMultiplier: Double = standardCacheReadMultiplier) {
@@ -108,6 +111,10 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     ("claude-fable-5", ModelPrice(display: "Fable 5", standard: Rate(input: 10, output: 50))),
     ("claude-mythos-5", ModelPrice(display: "Mythos 5", standard: Rate(input: 10, output: 50))),
 
+    // Cheaper than Opus 5 on every component, and "claude-opus-5" is a prefix of
+    // it — so without its own row it was billed as Opus 5 (catalogue tier
+    // tier_4_20_cache_read_0_20, CLI 2.1.284).
+    ("claude-opus-5-5", ModelPrice(display: "Opus 5.5", standard: Rate(input: 4, output: 20, cacheReadMultiplier: opus55CacheReadMultiplier))),
     ("claude-opus-5", ModelPrice(display: "Opus 5", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-8", ModelPrice(display: "Opus 4.8", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-7", ModelPrice(display: "Opus 4.7", standard: Rate(input: 5, output: 25))),
@@ -126,6 +133,8 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     // Sonnet 5 launched at 2/10 "through 2026-08-31"; Anthropic then made that
     // the standard price and cancelled the increase to 3/15. Carrying it as a
     // promotion that lapsed would have started overcharging it 50% on 09-01.
+    // Same tier as Sonnet 5; its own row only so it is labelled as itself.
+    ("claude-sonnet-5-5", ModelPrice(display: "Sonnet 5.5", standard: Rate(input: 2, output: 10))),
     ("claude-sonnet-5", ModelPrice(display: "Sonnet 5", standard: Rate(input: 2, output: 10))),
     ("claude-sonnet-4-6", ModelPrice(display: "Sonnet 4.6", standard: Rate(input: 3, output: 15))),
     ("claude-sonnet-4-5", ModelPrice(display: "Sonnet 4.5", standard: Rate(input: 3, output: 15))),
@@ -172,7 +181,10 @@ private let chartWindowDays = 30
 /// "claude-fable-5" row and being priced and labelled as Fable 5; and Sonnet 5's
 /// launch rate became permanent, so entries from 2026-09-01 on were being billed
 /// at 3/15 instead of 2/10.
-private let cacheVersion = 9
+/// 10: added Opus 5.5 and Sonnet 5.5. Both were matching their 5.0 rows; Opus
+/// 5.5 was billed at 5/25 with reads at 0.1× instead of 4/20 with reads at
+/// 0.05×, overstating it 1.62–1.75× on the two days checked against ccusage.
+private let cacheVersion = 10
 
 private struct EntryCost: Codable {
     let model: String
