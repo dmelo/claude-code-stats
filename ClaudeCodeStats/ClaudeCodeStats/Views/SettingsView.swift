@@ -6,6 +6,9 @@ struct SettingsView: View {
     @AppStorage("showWeeklyInMenuBar") private var showWeekly = false
     @AppStorage("showFableInMenuBar") private var showFable = false
     @AppStorage("appearancePreference") private var appearance: AppearancePreference = .system
+    @AppStorage(ProfilePreferences.hiddenKey) private var hiddenProfilesRaw = ""
+    @AppStorage(ProfilePreferences.labelsKey) private var profileLabelsRaw = ""
+    @State private var accounts = AimuxService.discoverAccounts()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +26,9 @@ struct SettingsView: View {
                 authStatusSection
                 appearanceSection
                 menuBarDisplaySection
+                if accounts.count > 1 {
+                    profilesSection
+                }
                 versionRow
             }
             .padding(12)
@@ -136,6 +142,72 @@ struct SettingsView: View {
         .padding(12)
         .background(Theme.cardBackground)
         .cornerRadius(8)
+    }
+
+    // One row per aimux profile: whether it gets rings in the menu bar, and the
+    // short label drawn before them. An empty label falls back to the profile
+    // name. The popover always lists every profile.
+    private var profilesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("aimux Profiles")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Theme.textPrimary)
+
+            ForEach(accounts) { account in
+                if let name = account.profileName {
+                    profileRow(name)
+                }
+            }
+
+            Text("Label is what the menu bar shows before the rings. Leave it empty to use the profile name.")
+                .font(.system(size: 10))
+                .foregroundColor(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(Theme.cardBackground)
+        .cornerRadius(8)
+    }
+
+    private func profileRow(_ name: String) -> some View {
+        HStack(spacing: 8) {
+            Toggle(name, isOn: visibilityBinding(for: name))
+                .font(.system(size: 11))
+                .foregroundColor(Theme.textSecondary)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+
+            Spacer()
+
+            TextField(name, text: labelBinding(for: name))
+                .font(.system(size: 11))
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .frame(width: 80)
+                .accessibilityLabel("Menu bar label for \(name)")
+        }
+    }
+
+    private func visibilityBinding(for name: String) -> Binding<Bool> {
+        Binding(
+            get: { !ProfilePreferences.hidden(from: hiddenProfilesRaw).contains(name) },
+            set: { visible in
+                var hidden = ProfilePreferences.hidden(from: hiddenProfilesRaw)
+                if visible { hidden.remove(name) } else { hidden.insert(name) }
+                hiddenProfilesRaw = ProfilePreferences.encodeHidden(hidden)
+            }
+        )
+    }
+
+    private func labelBinding(for name: String) -> Binding<String> {
+        Binding(
+            get: { ProfilePreferences.labels(from: profileLabelsRaw)[name] ?? "" },
+            set: { label in
+                var labels = ProfilePreferences.labels(from: profileLabelsRaw)
+                labels[name] = label.isEmpty ? nil : label
+                profileLabelsRaw = ProfilePreferences.encodeLabels(labels)
+            }
+        )
     }
 
     private var versionRow: some View {

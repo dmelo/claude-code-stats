@@ -24,6 +24,8 @@
 		A20 /* SpendCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22 /* SpendCardView.swift */; };
 		A21 /* SpendChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B23 /* SpendChartView.swift */; };
 		A22 /* RTKSavingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24 /* RTKSavingsService.swift */; };
+		A25 /* AimuxService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27 /* AimuxService.swift */; };
+		A26 /* AccountUsageCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28 /* AccountUsageCardView.swift */; };
 		A23 /* RTKSavingsCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25 /* RTKSavingsCardView.swift */; };
 		A24 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B26 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -49,6 +51,8 @@
 		B22 /* SpendCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendCardView.swift; sourceTree = "<group>"; };
 		B23 /* SpendChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendChartView.swift; sourceTree = "<group>"; };
 		B24 /* RTKSavingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RTKSavingsService.swift; sourceTree = "<group>"; };
+		B27 /* AimuxService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AimuxService.swift; sourceTree = "<group>"; };
+		B28 /* AccountUsageCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountUsageCardView.swift; sourceTree = "<group>"; };
 		B25 /* RTKSavingsCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RTKSavingsCardView.swift; sourceTree = "<group>"; };
 		P01 /* ClaudeCodeStats.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeCodeStats.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -95,6 +99,7 @@
 			children = (
 				B21 /* CostService.swift */,
 				B24 /* RTKSavingsService.swift */,
+				B27 /* AimuxService.swift */,
 				B14 /* StatusService.swift */,
 				B20 /* UsageHistoryService.swift */,
 				B15 /* VersionService.swift */,
@@ -108,6 +113,7 @@
 			children = (
 				B06 /* ProgressBarView.swift */,
 				B07 /* UsageCardView.swift */,
+				B28 /* AccountUsageCardView.swift */,
 				B13 /* SettingsView.swift */,
 				B22 /* SpendCardView.swift */,
 				B23 /* SpendChartView.swift */,
@@ -210,6 +216,8 @@
 				A20 /* SpendCardView.swift in Sources */,
 				A21 /* SpendChartView.swift in Sources */,
 				A22 /* RTKSavingsService.swift in Sources */,
+				A25 /* AimuxService.swift in Sources */,
+				A26 /* AccountUsageCardView.swift in Sources */,
 				A23 /* RTKSavingsCardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
