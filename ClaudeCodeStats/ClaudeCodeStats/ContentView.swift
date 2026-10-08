@@ -223,7 +223,7 @@ struct ContentView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            if !OAuthUsageService.shared.hasCredentials {
+            if !viewModel.allAccountsHaveCredentials {
                 Button("How to fix") {
                     showingSettings = true
                 }
@@ -349,7 +349,7 @@ struct ContentView: View {
     }
 
     private func lastUpdatedString(at now: Date) -> String {
-        guard let lastUpdated = viewModel.webUsage?.lastUpdated else {
+        guard let lastUpdated = viewModel.lastUpdated else {
             return "Not yet updated"
         }
 

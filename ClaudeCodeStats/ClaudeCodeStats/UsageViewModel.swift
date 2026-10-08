@@ -19,14 +19,30 @@ class UsageViewModel: ObservableObject {
 
     var isMultiAccount: Bool { accounts.count > 1 }
 
-    // The first account's reading. The single-account popover, the footer's
-    // "updated" time and the refresh throttle all read these.
+    // The first account's reading, for the single-account popover.
     var webUsage: WebUsageData? {
         accounts.first.flatMap { usageByAccount[$0.id]?.usage }
     }
 
     var error: String? {
         accounts.first.flatMap { usageByAccount[$0.id]?.error }
+    }
+
+    /// Newest successful reading across accounts, for the footer. Keyed on any
+    /// account, not the first, so one lapsed login doesn't freeze it at "Not
+    /// yet updated" while the others refresh.
+    var lastUpdated: Date? {
+        accounts.compactMap { usageByAccount[$0.id]?.usage?.lastUpdated }.max()
+    }
+
+    /// Whether the logins being polled can be read. With aimux this is every
+    /// profile's, not ~/.claude's — which may not be one of them at all.
+    func hasCredentials(_ account: ClaudeAccount) -> Bool {
+        OAuthUsageService.service(for: account).hasCredentials
+    }
+
+    var allAccountsHaveCredentials: Bool {
+        accounts.allSatisfy(hasCredentials)
     }
 
     // When the last full pass over the accounts finished. The popover-open
@@ -93,10 +109,15 @@ class UsageViewModel: ObservableObject {
             usageByAccount = usageByAccount.filter { key, _ in discovered.contains { $0.id == key } }
         }
 
-        // One account at a time: each has its own token and its own budget on
-        // the endpoint, and serial requests keep a slow one from racing another.
-        for account in accounts {
-            await refreshUsage(for: account)
+        // Concurrently: each account has its own token, service instance and
+        // dictionary slot, and everything else they touch is main-actor state
+        // updated between awaits, so the fetches can't trample each other. Serially,
+        // an offline machine would wait out every account's retries in turn
+        // (about a minute each) with the spinner held and spend/status queued.
+        await withTaskGroup(of: Void.self) { group in
+            for account in accounts {
+                group.addTask { await self.refreshUsage(for: account) }
+            }
         }
         lastRefreshAt = Date()
 
@@ -128,13 +149,25 @@ class UsageViewModel: ObservableObject {
             // Keep the last good data on screen. When it exists, ContentView
             // shows a subtle banner instead of replacing everything with an error.
             switch error as? UsageError {
-            case .tokenExpired, .noCredentials:
+            case .tokenExpired:
                 entry.needsLogin = true
                 entry.error = account.profileName == nil
                     ? error.localizedDescription
                     : "Login expired. Run '\(account.reauthCommand)' to refresh it."
+            case .noCredentials:
+                // Nothing readable at all: never logged in, or Keychain access
+                // was denied. Re-running the CLI fixes only the first, so say both.
+                entry.needsLogin = true
+                entry.error = account.profileName == nil
+                    ? error.localizedDescription
+                    : "No login found. Run '\(account.reauthCommand)' to log in, or allow Keychain access if macOS asked."
             default:
-                entry.error = error.localizedDescription
+                // A transient failure on top of a lapsed login keeps the login
+                // message: it is still the thing the user has to act on, and
+                // needsLogin is still hiding the rows it would otherwise explain.
+                if !entry.needsLogin {
+                    entry.error = error.localizedDescription
+                }
             }
         }
         usageByAccount[account.id] = entry

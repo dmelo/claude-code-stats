@@ -26,9 +26,10 @@ struct ClaudeCodeStatsApp: App {
                 .environmentObject(viewModel)
                 .appearanceOverride(appearance)
         } label: {
+            let groups = showRings ? ringGroups : []
             ZStack(alignment: .topTrailing) {
-                if showRings, !ringGroups.isEmpty {
-                    Image(nsImage: renderRings(ringGroups))
+                if !groups.isEmpty {
+                    Image(nsImage: renderRings(groups))
                 } else {
                     Image(systemName: "chart.bar.fill")
                         .symbolRenderingMode(.hierarchical)
@@ -66,20 +67,25 @@ struct ClaudeCodeStatsApp: App {
     }
 
     private var ringGroups: [RingGroup] {
-        let hidden = ProfilePreferences.hidden(from: hiddenProfilesRaw)
+        let accounts = viewModel.accounts
         let labels = ProfilePreferences.labels(from: profileLabelsRaw)
-        let visible = viewModel.accounts.filter { account in
-            account.profileName.map { !hidden.contains($0) } ?? true
-        }
-        // A group left with no rings (only F selected, account has no Fable
-        // limit) is dropped rather than drawn as a bare name.
-        return visible.map { account in
+        // Hiding applies only while Settings can show the toggle to undo it,
+        // which it does from two profiles up. A lone remaining profile that was
+        // hidden earlier would otherwise vanish with no way back.
+        let hidden = accounts.count > 1 ? ProfilePreferences.hidden(from: hiddenProfilesRaw) : []
+        // A profile left with no rings (only F selected, plan has no Fable
+        // limit) is dropped rather than drawn as a bare name — and dropped
+        // before deciding on names, so a lone survivor is drawn without one.
+        let shown = accounts
+            .filter { account in account.profileName.map { !hidden.contains($0) } ?? true }
+            .map { account in (account, rings(for: account)) }
+            .filter { !$0.1.isEmpty }
+        return shown.map { account, rings in
             RingGroup(
-                name: visible.count > 1 ? ProfilePreferences.label(for: account, in: labels) : nil,
-                rings: rings(for: account)
+                name: shown.count > 1 ? ProfilePreferences.label(for: account, in: labels) : nil,
+                rings: rings
             )
         }
-        .filter { !$0.rings.isEmpty }
     }
 
     private func rings(for account: ClaudeAccount) -> [RingSegment] {
@@ -88,10 +94,18 @@ struct ClaudeCodeStatsApp: App {
         var rings: [RingSegment] = []
         if showSession { rings.append(RingSegment(label: "S", progress: usage?.sessionUsage)) }
         if showWeekly { rings.append(RingSegment(label: "W", progress: usage?.weeklyUsage)) }
-        // Not every plan carries a Fable limit; an account without one gets no F
-        // ring rather than an empty one. Unknown (no reading yet) also omits it.
-        if showFable, let fable = usage?.scopedLimits.first(where: { $0.name == "Fable" }) {
-            rings.append(RingSegment(label: "F", progress: fable.usage))
+        // Not every plan carries a Fable limit; an account whose reading has
+        // none gets no F ring rather than an empty one. With no reading at all
+        // we can't tell, so it gets the dashed ring like S and W — otherwise an
+        // F-only bar would silently drop every login it can't read.
+        if showFable {
+            if let usage {
+                if let fable = usage.scopedLimits.first(where: { $0.name == "Fable" }) {
+                    rings.append(RingSegment(label: "F", progress: fable.usage))
+                }
+            } else {
+                rings.append(RingSegment(label: "F", progress: nil))
+            }
         }
         return rings
     }
@@ -175,7 +189,7 @@ struct ClaudeCodeStatsApp: App {
         // No reading: a dashed track only, so "can't tell" never passes for 0%.
         guard let progress else {
             ctx.saveGState()
-            ctx.setStrokeColor(NSColor.gray.withAlphaComponent(0.6).cgColor)
+            ctx.setStrokeColor(Theme.ringNoReadingColor.cgColor)
             ctx.setLineWidth(lineWidth * 0.6)
             ctx.setLineDash(phase: 0, lengths: [2, 2])
             ctx.addArc(center: center, radius: radius, startAngle: 0, endAngle: 2 * .pi, clockwise: false)
@@ -185,7 +199,7 @@ struct ClaudeCodeStatsApp: App {
         }
 
         // Track
-        ctx.setStrokeColor(NSColor.gray.withAlphaComponent(0.3).cgColor)
+        ctx.setStrokeColor(Theme.ringTrackColor.cgColor)
         ctx.setLineWidth(lineWidth)
         ctx.setLineCap(.butt)
         ctx.addArc(center: center, radius: radius, startAngle: 0, endAngle: 2 * .pi, clockwise: false)

@@ -70,10 +70,10 @@ enum AimuxService {
         var entries: [(name: String, fields: [String: String])] = []
         var inProfiles = false
         var profileIndent: Int?
+        var fieldIndent: Int?
 
         for rawLine in text.components(separatedBy: .newlines) {
-            let line = rawLine.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
-                .first.map(String.init) ?? ""
+            let line = stripComment(rawLine)
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
             let indent = line.prefix(while: { $0 == " " }).count
@@ -81,19 +81,25 @@ enum AimuxService {
             if indent == 0 {
                 inProfiles = trimmed == "profiles:"
                 profileIndent = nil
+                fieldIndent = nil
                 continue
             }
             guard inProfiles else { continue }
 
             if profileIndent == nil { profileIndent = indent }
             if indent == profileIndent, trimmed.hasSuffix(":") {
-                entries.append((String(trimmed.dropLast()), [:]))
-            } else if indent > (profileIndent ?? 0), !entries.isEmpty,
+                entries.append((unquote(String(trimmed.dropLast())), [:]))
+                fieldIndent = nil
+            } else if let profileIndent, indent > profileIndent, !entries.isEmpty,
                       let colon = trimmed.firstIndex(of: ":") {
-                let key = trimmed[..<colon].trimmingCharacters(in: .whitespaces)
-                let value = trimmed[trimmed.index(after: colon)...]
-                    .trimmingCharacters(in: .whitespaces)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                // Fields sit at the first indent seen under the profile. Keys
+                // deeper than that belong to a nested map (an `env:` block, say)
+                // and must not overwrite the profile's own `path`.
+                if fieldIndent == nil { fieldIndent = indent }
+                guard indent == fieldIndent else { continue }
+                let key = unquote(trimmed[..<colon].trimmingCharacters(in: .whitespaces))
+                let value = unquote(trimmed[trimmed.index(after: colon)...]
+                    .trimmingCharacters(in: .whitespaces))
                 entries[entries.count - 1].fields[key] = value
             }
         }
@@ -108,6 +114,30 @@ enum AimuxService {
                 keychainService: ClaudeAccount.keychainService(configDir: dir, isSource: isSource)
             )
         }
+    }
+
+    // YAML starts a comment only at a `#` that opens the line or follows
+    // whitespace, and never inside quotes — a path like /work#2 keeps its `#`.
+    private static func stripComment(_ line: String) -> String {
+        var quote: Character?
+        var previous: Character = " "
+        for (offset, char) in line.enumerated() {
+            if let open = quote {
+                if char == open { quote = nil }
+            } else if char == "\"" || char == "'" {
+                quote = char
+            } else if char == "#", previous == " " || previous == "\t" {
+                return String(line.prefix(offset))
+            }
+            previous = char
+        }
+        return line
+    }
+
+    private static func unquote(_ value: String) -> String {
+        guard value.count >= 2, let first = value.first, first == value.last,
+              first == "\"" || first == "'" else { return value }
+        return String(value.dropFirst().dropLast())
     }
 
     private static func expandHome(_ path: String) -> String {

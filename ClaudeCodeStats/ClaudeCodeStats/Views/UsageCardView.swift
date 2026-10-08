@@ -1,17 +1,15 @@
 import SwiftUI
 
-struct UsageCardView: View {
-    let title: String
-    let usage: Double
-    let resetsAt: Date
-
-    private static let resetDateFormatter: DateFormatter = {
+// The "Resets in 4h 12m" / "Resets Thu 12:59" line, shared by the full usage
+// card and the per-profile rows so the two can't drift apart.
+enum ResetCountdown {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE h:mm a"
         return formatter
     }()
 
-    private func resetTimeString(at now: Date) -> String {
+    static func text(until resetsAt: Date, now: Date) -> String {
         let interval = resetsAt.timeIntervalSince(now)
 
         if interval <= 0 {
@@ -22,13 +20,19 @@ struct UsageCardView: View {
         let minutes = (Int(interval) % 3600) / 60
 
         if hours > 24 {
-            return "Resets \(Self.resetDateFormatter.string(from: resetsAt))"
+            return "Resets \(dateFormatter.string(from: resetsAt))"
         } else if hours > 0 {
             return "Resets in \(hours)h \(minutes)m"
         } else {
             return "Resets in \(minutes)m"
         }
     }
+}
+
+struct UsageCardView: View {
+    let title: String
+    let usage: Double
+    let resetsAt: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -46,7 +50,7 @@ struct UsageCardView: View {
             }
 
             TimelineView(.everyMinute) { context in
-                Text(resetTimeString(at: context.date))
+                Text(ResetCountdown.text(until: resetsAt, now: context.date))
                     .font(.system(size: 11))
                     .foregroundColor(Theme.textSecondary)
             }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @EnvironmentObject var viewModel: UsageViewModel
     @Binding var isPresented: Bool
     @AppStorage("showSessionInMenuBar") private var showSession = false
     @AppStorage("showWeeklyInMenuBar") private var showWeekly = false
@@ -8,7 +9,8 @@ struct SettingsView: View {
     @AppStorage("appearancePreference") private var appearance: AppearancePreference = .system
     @AppStorage(ProfilePreferences.hiddenKey) private var hiddenProfilesRaw = ""
     @AppStorage(ProfilePreferences.labelsKey) private var profileLabelsRaw = ""
-    @State private var accounts = AimuxService.discoverAccounts()
+    // The view model's list, so Settings and the menu bar never disagree.
+    private var accounts: [ClaudeAccount] { viewModel.accounts }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -62,22 +64,19 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Theme.textPrimary)
 
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(OAuthUsageService.shared.hasCredentials ? Theme.statusOK : Theme.statusCritical)
-                    .frame(width: 8, height: 8)
-
-                Text(OAuthUsageService.shared.hasCredentials
-                     ? "Authenticated via Claude Code"
-                     : "Not authenticated")
-                    .font(.system(size: 11))
-                    .foregroundColor(Theme.textSecondary)
+            // One row per polled login. With aimux, ~/.claude may not be one of
+            // them, so the default login alone would describe the wrong thing.
+            ForEach(accounts) { account in
+                authRow(account)
             }
 
-            if !OAuthUsageService.shared.hasCredentials {
-                Text("Run 'claude' in your terminal to log in. Credentials are detected automatically.")
+            if !viewModel.allAccountsHaveCredentials {
+                Text(viewModel.isMultiAccount
+                     ? "Run 'aimux run <profile>' for each profile marked not authenticated. Credentials are detected automatically."
+                     : "Run '\(accounts.first?.reauthCommand ?? "claude")' in your terminal to log in. Credentials are detected automatically.")
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(8)
                     .background(Theme.inputBackground)
                     .cornerRadius(6)
@@ -86,6 +85,21 @@ struct SettingsView: View {
         .padding(12)
         .background(Theme.cardBackground)
         .cornerRadius(8)
+    }
+
+    private func authRow(_ account: ClaudeAccount) -> some View {
+        let authenticated = viewModel.hasCredentials(account)
+            && viewModel.usageByAccount[account.id]?.needsLogin != true
+        let status = authenticated ? "Authenticated via Claude Code" : "Not authenticated"
+        return HStack(spacing: 8) {
+            Circle()
+                .fill(authenticated ? Theme.statusOK : Theme.statusCritical)
+                .frame(width: 8, height: 8)
+
+            Text(account.profileName.map { "\($0): \(status)" } ?? status)
+                .font(.system(size: 11))
+                .foregroundColor(Theme.textSecondary)
+        }
     }
 
     private var appearanceSection: some View {
@@ -227,4 +241,5 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView(isPresented: .constant(true))
+        .environmentObject(UsageViewModel())
 }

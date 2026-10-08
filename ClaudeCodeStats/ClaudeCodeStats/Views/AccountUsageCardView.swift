@@ -7,12 +7,6 @@ struct AccountUsageCardView: View {
     let name: String
     let state: AccountUsage?
 
-    private static let resetDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE h:mm a"
-        return formatter
-    }()
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(name)
@@ -64,7 +58,7 @@ struct AccountUsageCardView: View {
             }
 
             TimelineView(.everyMinute) { context in
-                Text(resetTimeString(resetsAt, at: context.date))
+                Text(ResetCountdown.text(until: resetsAt, now: context.date))
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textSecondary)
                     .padding(.leading, 60)
@@ -82,21 +76,6 @@ struct AccountUsageCardView: View {
                 .font(.system(size: 10))
                 .foregroundColor(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func resetTimeString(_ resetsAt: Date, at now: Date) -> String {
-        let interval = resetsAt.timeIntervalSince(now)
-        if interval <= 0 { return "Resetting..." }
-
-        let hours = Int(interval) / 3600
-        let minutes = (Int(interval) % 3600) / 60
-        if hours > 24 {
-            return "Resets \(Self.resetDateFormatter.string(from: resetsAt))"
-        } else if hours > 0 {
-            return "Resets in \(hours)h \(minutes)m"
-        } else {
-            return "Resets in \(minutes)m"
         }
     }
 }
