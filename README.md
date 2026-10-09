@@ -75,6 +75,22 @@ To show rings in the menu bar instead of the chart icon, open Settings (the gear
 - **An expired login** isn't refreshed by the app; its card tells you to run `aimux run <profile>`, which lets Claude Code refresh it.
 - **Spend and RTK savings** are shown once, for all profiles together. aimux shares `projects/` (where the transcripts live) across profiles, and a transcript doesn't record which account produced it, so spend can't be split per profile.
 
+## Spend from other machines
+
+If you also run Claude Code on another machine (a Linux box you ssh into, say), `scripts/sync-host-transcripts.sh` mirrors its transcripts onto this Mac so the spend card counts both. It is a script you run yourself, not an app setting:
+
+```bash
+scripts/sync-host-transcripts.sh sync my-linux-box      # one sync, now
+scripts/sync-host-transcripts.sh install my-linux-box   # every 15 minutes, via a LaunchAgent
+scripts/sync-host-transcripts.sh uninstall my-linux-box
+```
+
+- `my-linux-box` is anything `ssh` accepts, including an alias from `~/.ssh/config`. The key has to work without a prompt (the script uses `BatchMode=yes`).
+- It copies the last 31 days of `~/.claude/projects` from that host into `~/.config/claude/projects/<host>/`, which the spend scan already reads. Claude Code on macOS doesn't use `~/.config/claude`, so the mirror never shows up in your own sessions. Copies older than 35 days are pruned.
+- Syncing the same transcripts again never double-counts: spend dedups on message and request ids.
+- The spend card shows the combined total; there is no per-machine breakdown yet. `ccusage` on this Mac also reads `~/.config/claude`, so its totals will include the mirror too.
+- Logs go to `~/Library/Logs/ClaudeCodeStats/sync-<host>.log`.
+
 ## Usage
 
 Click the menu bar icon to see your current usage:
