@@ -59,7 +59,7 @@ Download the latest `.app` from the [Releases](https://github.com/dmelo/claude-c
 2. Launch the app - a chart icon will appear in your menu bar
 3. Click the icon to see your usage data
 
-The app reads your OAuth credentials from `~/.claude/.credentials.json` or the macOS Keychain (created automatically when you log in to Claude Code). No manual configuration needed. The first time it reads a login from the Keychain, macOS asks for permission — choose **Always Allow**.
+The app reads your OAuth credentials from `~/.claude/.credentials.json` or the macOS Keychain (created automatically when you log in to Claude Code). No manual configuration needed. Keychain logins are read through macOS's own `security` tool, which Claude Code's Keychain items already trust, so there is no permission prompt — not on first launch and not after updates.
 
 To show rings in the menu bar instead of the chart icon, open Settings (the gear in the popover) and turn on any of **Menu Bar Display**'s toggles.
 
@@ -68,7 +68,7 @@ To show rings in the menu bar instead of the chart icon, open Settings (the gear
 [aimux](https://github.com/Digital-Threads/aimux) runs Claude Code under several subscriptions, one config directory per profile. Claude Code Stats picks this up on its own — there is nothing to configure:
 
 - **Profiles** are read from `~/.aimux/config.yaml` on every refresh, so a profile you add or remove in aimux shows up (or disappears) within one refresh. Only `cli: claude` profiles are shown. Without aimux the app shows your single `~/.claude` login, exactly as before.
-- **Each profile's login** is read from the Keychain item Claude Code keeps for that config directory, so every profile's limits come from its own account. macOS asks for Keychain permission once per profile.
+- **Each profile's login** is read from the Keychain item Claude Code keeps for that config directory, so every profile's limits come from its own account.
 - **The popover** shows one card per profile, with session, weekly and per-model limits and their reset times.
 - **The menu bar** draws each visible profile's rings after its name: `main S◯ W◯   personal S◯ W◯`. The S/W/F toggles apply to every profile. A profile whose plan has no Fable limit gets no F ring, and a profile whose login can't be read (expired, signed out) gets a dashed ring rather than a misleading 0%. With only one profile visible the name is left out.
 - **Settings → aimux Profiles** lets you hide a profile from the menu bar and give it a shorter label (`main` → `m`), which helps on a crowded menu bar — on a notched MacBook, macOS silently hides items that don't fit.
@@ -140,7 +140,7 @@ ClaudeCodeStats/
 
 ## Privacy
 
-- The app reads OAuth credentials from `~/.claude/.credentials.json` or the macOS Keychain — for aimux, each profile's own Keychain item and `~/.aimux/config.yaml`. To avoid repeated Keychain prompts it keeps a copy of each access token in its own Keychain item (`ClaudeCodeStats-credentials`, this device only), and never refreshes or writes back Claude Code's credentials
+- The app reads OAuth credentials from `~/.claude/.credentials.json` or the macOS Keychain — for aimux, each profile's own Keychain item and `~/.aimux/config.yaml`. Tokens are held in memory only; the app never refreshes or writes back Claude Code's credentials. (Versions up to 0.13.0 cached a copy in a `ClaudeCodeStats-credentials` Keychain item; it is no longer read or written, and you can delete it in Keychain Access.)
 - The app communicates with the Anthropic API to fetch usage data, status.claude.com for service health, and the GitHub API for version checks
 - API-equivalent spend and RTK savings are computed entirely on your machine from Claude Code's transcripts and RTK's local history database — no network calls, and nothing about your usage leaves your device
 - No data is sent to any third parties

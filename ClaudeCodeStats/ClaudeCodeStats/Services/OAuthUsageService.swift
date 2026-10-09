@@ -26,20 +26,10 @@ class OAuthUsageService {
     private let usageURL = "https://api.anthropic.com/api/oauth/usage"
     private var credentialsPath: String { account.credentialsPath }
     private var keychainService: String { account.keychainService }
-    private let appKeychainService = "ClaudeCodeStats-credentials"
-    // The bare login keeps the account name older builds wrote, so upgrading
-    // reuses the cached token instead of prompting for the CLI's item again.
-    private var appKeychainAccount: String {
-        account.keychainService == ClaudeAccount.keychainBase
-            ? "oauth-token"
-            : "oauth-token" + account.keychainService.dropFirst(ClaudeAccount.keychainBase.count)
-    }
     private var cachedCredential: Credential?
     // Outcome of the last sweep that turned up no usable credential, expired
-    // stand-in included. Such a sweep costs a file read plus two
-    // SecItemCopyMatching calls, one of them against the CLI's item — the
-    // prompt-capable read the app cache exists to avoid — and cachedCredential
-    // cannot absorb it, because its gate is isUsable and so never matches a
+    // stand-in included. Such a sweep costs a file read plus a `security`
+    // subprocess against the CLI's item, and cachedCredential cannot absorb it, because its gate is isUsable and so never matches a
     // lapsed token. hasCredentials is evaluated inside SwiftUI bodies that re-run
     // on every redraw, so without this the all-expired and signed-out states both
     // mean unbounded keychain traffic. Reusing the outcome for a short window
@@ -180,27 +170,16 @@ class OAuthUsageService {
             return cred
         }
 
-        // App-owned keychain cache — avoids repeated permission prompts on the
-        // CLI's item. Trust it only while unexpired; a token that has rotated out
-        // is skipped so we fall through and re-read the live source below.
-        let appCacheCredential = readCredentialFromAppKeychain()
-        if let cred = appCacheCredential, cred.isUsable, !isSuperseded(cred) {
-            adopt(cred)
-            return cred
-        }
-
         // Live keychain source owned by the Claude Code CLI. Re-reading here is
-        // what picks up a token the CLI has rotated; cache the result (in the new
-        // format, with expiry) so we don't prompt on every fetch. It sits after
-        // the app cache, as it already did, so a usable cache still spares us the
-        // prompt.
+        // what picks up a token the CLI has rotated. It is read through
+        // /usr/bin/security, which never prompts (see readCredentialFromKeychain),
+        // so there is no on-disk copy to keep: the in-memory cache above is enough.
         // Date taken before the data: a write landing between the two reads then
         // looks newer than our copy and is picked up next time, not masked.
         let modifiedBeforeRead = cliItemModified()
         var keychainCredential = readCredentialFromKeychain(service: keychainService)
         keychainCredential?.sourceModified = modifiedBeforeRead
         if let cred = keychainCredential, cred.isUsable {
-            saveCredentialToAppKeychain(cred)
             adopt(cred)
             return cred
         }
@@ -208,12 +187,8 @@ class OAuthUsageService {
         // Nothing is unexpired, so send the token that lapsed most recently
         // rather than claiming we have no credentials — signed in with a stale
         // token is not the same as signed out, and a request that fails tells the
-        // user more than a false "not signed in" would. The app cache is a
-        // candidate alongside the live sources: when a live read starts failing
-        // (a denied prompt, a renamed item) it can hold the newest token we ever
-        // saw, and leaving it out would resurrect the very "no credentials" claim
-        // this pass exists to avoid.
-        let expired: [Credential] = [fileCredential, appCacheCredential, keychainCredential]
+        // user more than a false "not signed in" would.
+        let expired: [Credential] = [fileCredential, keychainCredential]
             .compactMap { $0 }
         let fallback = expired.max(by: { ($0.expiresAt ?? .distantPast) < ($1.expiresAt ?? .distantPast) })
         lastUnusableSweep = (fallback, Date())
@@ -239,8 +214,8 @@ class OAuthUsageService {
     // A cached copy is superseded when the CLI has written its item since the
     // copy was taken. Unexpired isn't enough: logging a config dir into another
     // account leaves the old account's token valid for hours, and without this
-    // check its usage keeps being shown under the new login. A cache entry from
-    // an older build carries no date and is treated as superseded, once.
+    // check its usage keeps being shown under the new login. A copy with no date
+    // (the file source) is treated as superseded once the item exists.
     private func isSuperseded(_ credential: Credential) -> Bool {
         guard let modified = cliItemModified() else { return false }
         guard let seen = credential.sourceModified else { return true }
@@ -264,7 +239,6 @@ class OAuthUsageService {
     private func clearTokenCaches() {
         cachedCredential = nil
         lastUnusableSweep = nil
-        deleteAppKeychainItem()
     }
 
     private func readCredentialFromFile() -> Credential? {
@@ -274,29 +248,24 @@ class OAuthUsageService {
         return extractCredential(from: data)
     }
 
-    // The app keychain stores our own {accessToken, expiresAt} JSON so we can
-    // tell when a cached token has rotated out. A value written by an older build
-    // (a bare token string) won't parse and is treated as absent — so the app
-    // transparently re-reads the live source and re-caches in the new format.
-    private func readCredentialFromAppKeychain() -> Credential? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: appKeychainService,
-            kSecAttrAccount as String: appKeychainAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
-        }
-        return decodeCachedCredential(from: data)
-    }
-
+    // Claude Code writes its login with `security add-generic-password`, which
+    // puts /usr/bin/security on the item's access list. Reading through the same
+    // tool therefore never prompts. Reading through the Keychain API instead
+    // makes macOS ask once per item for this app, and because the app is ad-hoc
+    // signed it is identified by its exact binary hash, so "Always Allow" lapsed
+    // with every build and every release. The API read stays as the fallback for
+    // an item the tool can't read (one written some other way, say); it may
+    // prompt, as before.
     private func readCredentialFromKeychain(service: String) -> Credential? {
+        switch readViaSecurityTool(service: service) {
+        case .found(let data):
+            return extractCredential(from: data)
+        case .notFound:
+            return nil
+        case .failed:
+            break
+        }
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -313,55 +282,45 @@ class OAuthUsageService {
         return extractCredential(from: data)
     }
 
-    private func saveCredentialToAppKeychain(_ credential: Credential) {
-        var payload: [String: Any] = ["accessToken": credential.token]
-        if let expiresAt = credential.expiresAt {
-            payload["expiresAt"] = expiresAt.timeIntervalSince1970
-        }
-        if let sourceModified = credential.sourceModified {
-            payload["sourceModified"] = sourceModified.timeIntervalSince1970
-        }
-        guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
-
-        // Delete existing item first (if any)
-        deleteAppKeychainItem()
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: appKeychainService,
-            kSecAttrAccount as String: appKeychainAccount,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        ]
-        let status = SecItemAdd(query as CFDictionary, nil)
-        if status != errSecSuccess {
-            NSLog("OAuthUsageService: Failed to cache credential in app keychain (status: \(status))")
-        }
+    private enum SecurityToolRead {
+        case found(Data)
+        case notFound
+        case failed
     }
 
-    private func deleteAppKeychainItem() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: appKeychainService,
-            kSecAttrAccount as String: appKeychainAccount
-        ]
-        let status = SecItemDelete(query as CFDictionary)
-        if status != errSecSuccess && status != errSecItemNotFound {
-            NSLog("OAuthUsageService: Failed to delete app keychain item (status: \(status))")
-        }
-    }
+    // `security find-generic-password -w` prints the item's data and exits 0, or
+    // exits 44 when no item has that service. Capped at a few seconds: a locked
+    // keychain makes the tool wait on an unlock dialog, and this runs on the main
+    // actor. The blob is well under a pipe buffer, so waiting for exit before
+    // reading stdout can't deadlock.
+    private func readViaSecurityTool(service: String) -> SecurityToolRead {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-s", service, "-w"]
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
 
-    // Parses the {accessToken, expiresAt} JSON this app writes to its own keychain.
-    private func decodeCachedCredential(from data: Data) -> Credential? {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let token = json["accessToken"] as? String, !token.isEmpty else {
-            return nil
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
+        do {
+            try process.run()
+        } catch {
+            return .failed
         }
-        let expiresAt = (json["expiresAt"] as? NSNumber)
-            .map { Date(timeIntervalSince1970: $0.doubleValue) }
-        let sourceModified = (json["sourceModified"] as? NSNumber)
-            .map { Date(timeIntervalSince1970: $0.doubleValue) }
-        return Credential(token: token, expiresAt: expiresAt, sourceModified: sourceModified)
+        guard exited.wait(timeout: .now() + 4) == .success else {
+            process.terminate()
+            return .failed
+        }
+
+        switch process.terminationStatus {
+        case 0:
+            return .found(stdout.fileHandleForReading.readDataToEndOfFile())
+        case 44:
+            return .notFound
+        default:
+            return .failed
+        }
     }
 
     // Parses the Claude Code credential blob (claudeAiOauth.accessToken/expiresAt).
