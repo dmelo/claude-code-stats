@@ -90,7 +90,9 @@ struct ContentView: View {
 
             // Content — data-first: a transient refresh failure shows a subtle
             // banner above the last known usage rather than wiping it.
-            if let usage = viewModel.webUsage {
+            if viewModel.isMultiAccount {
+                multiAccountView
+            } else if let usage = viewModel.webUsage {
                 if let error = viewModel.error {
                     staleBanner(error)
                 }
@@ -144,18 +146,40 @@ struct ContentView: View {
                 )
             }
 
-            // Absent only until the first transcript scan finishes. The limits
-            // above come from the API and shouldn't wait on it.
-            if let spend = viewModel.spend {
-                SpendCardView(spend: spend)
-            }
-
-            // Only present when RTK is installed and has logged commands.
-            if let rtk = viewModel.rtkSavings {
-                RTKSavingsCardView(savings: rtk)
-            }
+            localStatsCards
         }
         .padding(12)
+    }
+
+    // One card per aimux profile, then the local stats once for all of them:
+    // the profiles share one transcripts dir, and a transcript records no
+    // account, so spend can't honestly be split per profile.
+    private var multiAccountView: some View {
+        VStack(spacing: 8) {
+            ForEach(viewModel.accounts) { account in
+                AccountUsageCardView(
+                    name: account.profileName ?? "Default",
+                    state: viewModel.usageByAccount[account.id]
+                )
+            }
+
+            localStatsCards
+        }
+        .padding(12)
+    }
+
+    @ViewBuilder
+    private var localStatsCards: some View {
+        // Absent only until the first transcript scan finishes. The limits
+        // above come from the API and shouldn't wait on it.
+        if let spend = viewModel.spend {
+            SpendCardView(spend: spend)
+        }
+
+        // Only present when RTK is installed and has logged commands.
+        if let rtk = viewModel.rtkSavings {
+            RTKSavingsCardView(savings: rtk)
+        }
     }
 
     private var loadingView: some View {
@@ -199,7 +223,7 @@ struct ContentView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            if !OAuthUsageService.shared.hasCredentials {
+            if !viewModel.allAccountsHaveCredentials {
                 Button("How to fix") {
                     showingSettings = true
                 }
@@ -325,7 +349,7 @@ struct ContentView: View {
     }
 
     private func lastUpdatedString(at now: Date) -> String {
-        guard let lastUpdated = viewModel.webUsage?.lastUpdated else {
+        guard let lastUpdated = viewModel.lastUpdated else {
             return "Not yet updated"
         }
 

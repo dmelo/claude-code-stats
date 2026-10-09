@@ -1,10 +1,55 @@
 import SwiftUI
 
+// The latest reading for one account. `usage` survives a failed refresh so the
+// popover can keep showing it under a banner; `needsLogin` says the reading can
+// no longer be refreshed without the user re-authenticating that login.
+struct AccountUsage {
+    var usage: WebUsageData?
+    var error: String?
+    var needsLogin = false
+}
+
 @MainActor
 class UsageViewModel: ObservableObject {
-    @Published var webUsage: WebUsageData?
-    @Published var error: String?
+    // Every login being polled, in aimux config order. Exactly one (the default
+    // ~/.claude login) when aimux isn't set up.
+    @Published private(set) var accounts: [ClaudeAccount] = AimuxService.discoverAccounts()
+    @Published private(set) var usageByAccount: [String: AccountUsage] = [:]
     @Published var isLoading = false
+
+    var isMultiAccount: Bool { accounts.count > 1 }
+
+    // The first account's reading, for the single-account popover.
+    var webUsage: WebUsageData? {
+        accounts.first.flatMap { usageByAccount[$0.id]?.usage }
+    }
+
+    var error: String? {
+        accounts.first.flatMap { usageByAccount[$0.id]?.error }
+    }
+
+    /// Newest successful reading across accounts, for the footer. Keyed on any
+    /// account, not the first, so one lapsed login doesn't freeze it at "Not
+    /// yet updated" while the others refresh.
+    var lastUpdated: Date? {
+        accounts.compactMap { usageByAccount[$0.id]?.usage?.lastUpdated }.max()
+    }
+
+    /// Whether the logins being polled can be read. With aimux this is every
+    /// profile's, not ~/.claude's — which may not be one of them at all.
+    func hasCredentials(_ account: ClaudeAccount) -> Bool {
+        OAuthUsageService.service(for: account).hasCredentials
+    }
+
+    var allAccountsHaveCredentials: Bool {
+        accounts.allSatisfy(hasCredentials)
+    }
+
+    // When the last full pass over the accounts finished. The popover-open
+    // throttle keys on this rather than on any reading's timestamp: an account
+    // whose login has lapsed never produces a reading, and keying on readings
+    // would re-poll every healthy account each time the popover opens.
+    private var lastRefreshAt: Date?
 
     // Status properties
     @Published var claudeStatus: ClaudeStatus?
@@ -57,28 +102,75 @@ class UsageViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        // With no data to fall back on, clear a prior error so a retry shows the
-        // loading state instead of freezing on the old error. When data exists we
-        // keep the error so the stale banner stays put during the retry.
-        if webUsage == nil {
-            error = nil
+        // Pick up profiles added to or removed from aimux since the last pass.
+        let discovered = AimuxService.discoverAccounts()
+        if discovered != accounts {
+            accounts = discovered
+            usageByAccount = usageByAccount.filter { key, _ in discovered.contains { $0.id == key } }
         }
 
-        do {
-            let usage = try await OAuthUsageService.shared.fetchUsage()
-            webUsage = usage
-            error = nil
-            UsageHistoryService.shared.record(usage)
-        } catch {
-            // Keep the last good data on screen. When webUsage exists, ContentView
-            // shows a subtle banner instead of replacing everything with an error.
-            self.error = error.localizedDescription
+        // Concurrently: each account has its own token, service instance and
+        // dictionary slot, and everything else they touch is main-actor state
+        // updated between awaits, so the fetches can't trample each other. Serially,
+        // an offline machine would wait out every account's retries in turn
+        // (about a minute each) with the spinner held and spend/status queued.
+        await withTaskGroup(of: Void.self) { group in
+            for account in accounts {
+                group.addTask { await self.refreshUsage(for: account) }
+            }
         }
+        lastRefreshAt = Date()
 
         // Also refresh status
         await refreshStatus()
         await refreshSpend()
         await refreshRTKSavings()
+    }
+
+    private func refreshUsage(for account: ClaudeAccount) async {
+        var entry = usageByAccount[account.id] ?? AccountUsage()
+        // With no data to fall back on, clear a prior error so a retry shows the
+        // loading state instead of freezing on the old error. When data exists we
+        // keep the error so the stale banner stays put during the retry.
+        if entry.usage == nil {
+            entry.error = nil
+            usageByAccount[account.id] = entry
+        }
+
+        do {
+            let usage = try await OAuthUsageService.service(for: account).fetchUsage()
+            entry = AccountUsage(usage: usage)
+            // The history file predates multiple accounts and holds one series;
+            // keep it fed by the first account only rather than interleaving.
+            if account == accounts.first {
+                UsageHistoryService.shared.record(usage)
+            }
+        } catch {
+            // Keep the last good data on screen. When it exists, ContentView
+            // shows a subtle banner instead of replacing everything with an error.
+            switch error as? UsageError {
+            case .tokenExpired:
+                entry.needsLogin = true
+                entry.error = account.profileName == nil
+                    ? error.localizedDescription
+                    : "Login expired. Run '\(account.reauthCommand)' to refresh it."
+            case .noCredentials:
+                // Nothing readable at all: never logged in, or Keychain access
+                // was denied. Re-running the CLI fixes only the first, so say both.
+                entry.needsLogin = true
+                entry.error = account.profileName == nil
+                    ? error.localizedDescription
+                    : "No login found. Run '\(account.reauthCommand)' to log in, or allow Keychain access if macOS asked."
+            default:
+                // A transient failure on top of a lapsed login keeps the login
+                // message: it is still the thing the user has to act on, and
+                // needsLogin is still hiding the rows it would otherwise explain.
+                if !entry.needsLogin {
+                    entry.error = error.localizedDescription
+                }
+            }
+        }
+        usageByAccount[account.id] = entry
     }
 
     // Spend reads the local transcripts, so it has no bearing on the usage
@@ -117,8 +209,8 @@ class UsageViewModel: ObservableObject {
     }
 
     func refreshIfNeeded() async {
-        // Only auto-refresh if no data or more than 1 minute since last update
-        if let lastUpdated = webUsage?.lastUpdated {
+        // Only auto-refresh if never refreshed or more than 1 minute since the last pass
+        if let lastUpdated = lastRefreshAt {
             let elapsed = Date().timeIntervalSince(lastUpdated)
             if elapsed < 60 {
                 // Still refresh status if we haven't fetched it yet

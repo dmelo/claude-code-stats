@@ -138,6 +138,12 @@ enum Theme {
         light: NSColor(red: 147/255, green: 51/255, blue: 234/255, alpha: 1),
         dark: NSColor(red: 168/255, green: 85/255, blue: 247/255, alpha: 1))
 
+    // Menu bar ring track, and the dashed ring for a login with no reading.
+    // Grey at two strengths: the dashed ring must read as "something is there
+    // but unknown", a step above the empty track it replaces.
+    static let ringTrackColor = NSColor.gray.withAlphaComponent(0.3)
+    static let ringNoReadingColor = NSColor.gray.withAlphaComponent(0.6)
+
     static let statusOK = Color(nsColor: Theme.statusOKColor)
     static let statusWarning = Color(nsColor: Theme.statusWarningColor)
     static let statusCritical = Color(nsColor: Theme.statusCriticalColor)

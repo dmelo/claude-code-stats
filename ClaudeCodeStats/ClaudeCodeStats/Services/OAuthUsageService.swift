@@ -3,16 +3,37 @@ import Security
 
 @MainActor
 class OAuthUsageService {
-    static let shared = OAuthUsageService()
+    static let shared = OAuthUsageService(account: .default)
 
+    // One instance per login, keyed by its Keychain service, so each keeps its
+    // own token cache and sweep bookkeeping. The default account and an aimux
+    // source profile share a service and therefore share an instance.
+    private static var instances: [String: OAuthUsageService] = [shared.account.id: shared]
+
+    static func service(for account: ClaudeAccount) -> OAuthUsageService {
+        if let existing = instances[account.id] {
+            existing.account = account
+            return existing
+        }
+        let created = OAuthUsageService(account: account)
+        instances[account.id] = created
+        return created
+    }
+
+    // Updated on lookup so a source profile, which shares the default
+    // instance, still reports its aimux name in messages.
+    private(set) var account: ClaudeAccount
     private let usageURL = "https://api.anthropic.com/api/oauth/usage"
-    private let credentialsPath: String = {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/.claude/.credentials.json"
-    }()
-    private let keychainService = "Claude Code-credentials"
+    private var credentialsPath: String { account.credentialsPath }
+    private var keychainService: String { account.keychainService }
     private let appKeychainService = "ClaudeCodeStats-credentials"
-    private let appKeychainAccount = "oauth-token"
+    // The bare login keeps the account name older builds wrote, so upgrading
+    // reuses the cached token instead of prompting for the CLI's item again.
+    private var appKeychainAccount: String {
+        account.keychainService == ClaudeAccount.keychainBase
+            ? "oauth-token"
+            : "oauth-token" + account.keychainService.dropFirst(ClaudeAccount.keychainBase.count)
+    }
     private var cachedCredential: Credential?
     // Outcome of the last sweep that turned up no usable credential, expired
     // stand-in included. Such a sweep costs a file read plus two
@@ -33,6 +54,11 @@ class OAuthUsageService {
     private struct Credential {
         let token: String
         let expiresAt: Date?
+        /// When the CLI's Keychain item was last written, as of reading this
+        /// token from it (nil for the file source). A later write means the CLI
+        /// rotated or re-logged in — possibly into a different account — so a
+        /// copy taken before it can't be trusted even while unexpired.
+        var sourceModified: Date? = nil
 
         // Treat a token as usable until shortly before it expires, so we never
         // send one that's about to lapse (a rotated-away token returns 429, not
@@ -45,7 +71,8 @@ class OAuthUsageService {
         }
     }
 
-    private init() {
+    private init(account: ClaudeAccount) {
+        self.account = account
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
         config.timeoutIntervalForRequest = 15
@@ -61,6 +88,7 @@ class OAuthUsageService {
         // Carry the whole credential, not just its string: whether we knew the
         // token was lapsed when we sent it is what lets us read a 429 correctly
         // below.
+        dropCachesIfSourceChanged()
         guard let credential = readCredential() else {
             throw UsageError.noCredentials
         }
@@ -156,7 +184,7 @@ class OAuthUsageService {
         // CLI's item. Trust it only while unexpired; a token that has rotated out
         // is skipped so we fall through and re-read the live source below.
         let appCacheCredential = readCredentialFromAppKeychain()
-        if let cred = appCacheCredential, cred.isUsable {
+        if let cred = appCacheCredential, cred.isUsable, !isSuperseded(cred) {
             adopt(cred)
             return cred
         }
@@ -166,7 +194,11 @@ class OAuthUsageService {
         // format, with expiry) so we don't prompt on every fetch. It sits after
         // the app cache, as it already did, so a usable cache still spares us the
         // prompt.
-        let keychainCredential = readCredentialFromKeychain(service: keychainService)
+        // Date taken before the data: a write landing between the two reads then
+        // looks newer than our copy and is picked up next time, not masked.
+        let modifiedBeforeRead = cliItemModified()
+        var keychainCredential = readCredentialFromKeychain(service: keychainService)
+        keychainCredential?.sourceModified = modifiedBeforeRead
         if let cred = keychainCredential, cred.isUsable {
             saveCredentialToAppKeychain(cred)
             adopt(cred)
@@ -186,6 +218,40 @@ class OAuthUsageService {
         let fallback = expired.max(by: { ($0.expiresAt ?? .distantPast) < ($1.expiresAt ?? .distantPast) })
         lastUnusableSweep = (fallback, Date())
         return fallback
+    }
+
+    // Modification date of the CLI's Keychain item. An attributes-only query
+    // never prompts, unlike reading the item's data, so this is cheap enough to
+    // run before every fetch.
+    private func cliItemModified() -> Date? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let attributes = result as? [String: Any] else { return nil }
+        return attributes[kSecAttrModificationDate as String] as? Date
+    }
+
+    // A cached copy is superseded when the CLI has written its item since the
+    // copy was taken. Unexpired isn't enough: logging a config dir into another
+    // account leaves the old account's token valid for hours, and without this
+    // check its usage keeps being shown under the new login. A cache entry from
+    // an older build carries no date and is treated as superseded, once.
+    private func isSuperseded(_ credential: Credential) -> Bool {
+        guard let modified = cliItemModified() else { return false }
+        guard let seen = credential.sourceModified else { return true }
+        return modified > seen
+    }
+
+    private func dropCachesIfSourceChanged() {
+        if let cached = cachedCredential, isSuperseded(cached) {
+            cachedCredential = nil
+        }
+        lastUnusableSweep = nil
     }
 
     // Take a live credential into the in-memory cache. Any record of a sweep that
@@ -252,6 +318,9 @@ class OAuthUsageService {
         if let expiresAt = credential.expiresAt {
             payload["expiresAt"] = expiresAt.timeIntervalSince1970
         }
+        if let sourceModified = credential.sourceModified {
+            payload["sourceModified"] = sourceModified.timeIntervalSince1970
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
 
         // Delete existing item first (if any)
@@ -290,7 +359,9 @@ class OAuthUsageService {
         }
         let expiresAt = (json["expiresAt"] as? NSNumber)
             .map { Date(timeIntervalSince1970: $0.doubleValue) }
-        return Credential(token: token, expiresAt: expiresAt)
+        let sourceModified = (json["sourceModified"] as? NSNumber)
+            .map { Date(timeIntervalSince1970: $0.doubleValue) }
+        return Credential(token: token, expiresAt: expiresAt, sourceModified: sourceModified)
     }
 
     // Parses the Claude Code credential blob (claudeAiOauth.accessToken/expiresAt).
