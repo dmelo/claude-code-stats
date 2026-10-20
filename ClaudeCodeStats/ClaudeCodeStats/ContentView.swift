@@ -255,12 +255,14 @@ struct ContentView: View {
 
             Spacer()
 
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
+            Button(action: { NSApplication.shared.terminate(nil) }) {
+                Image(systemName: "power")
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.textSecondary)
             }
-            .font(.system(size: 10))
-            .foregroundColor(Theme.textSecondary)
             .buttonStyle(.plain)
+            .help("Quit Claude Code Stats")
+            .accessibilityLabel("Quit")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
