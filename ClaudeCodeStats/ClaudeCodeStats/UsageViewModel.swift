@@ -140,11 +140,7 @@ class UsageViewModel: ObservableObject {
         do {
             let usage = try await OAuthUsageService.service(for: account).fetchUsage()
             entry = AccountUsage(usage: usage)
-            // The history file predates multiple accounts and holds one series;
-            // keep it fed by the first account only rather than interleaving.
-            if account == accounts.first {
-                UsageHistoryService.shared.record(usage)
-            }
+            UsageHistoryService.shared.record(usage, for: account)
         } catch {
             // Keep the last good data on screen. When it exists, ContentView
             // shows a subtle banner instead of replacing everything with an error.
