@@ -396,20 +396,26 @@ class OAuthUsageService {
                   let name = limit.scope?.model?.displayName, !name.isEmpty else {
                 return nil
             }
+            let resetsAt = parseDate(limit.resetsAt)
             return ScopedUsageLimit(
                 name: name,
                 usage: limit.percent ?? 0,
-                resetsAt: parseDate(limit.resetsAt) ?? Date()
+                resetsAt: resetsAt ?? Date(),
+                reportedResetsAt: resetsAt
             )
         }
 
+        let sessionResetsAt = parseDate(decoded.fiveHour?.resetsAt)
+        let weeklyResetsAt = parseDate(decoded.sevenDay?.resetsAt)
         return WebUsageData(
             sessionUsage: decoded.fiveHour?.utilization ?? 0,
-            sessionResetsAt: parseDate(decoded.fiveHour?.resetsAt) ?? Date(),
+            sessionResetsAt: sessionResetsAt ?? Date(),
             weeklyUsage: decoded.sevenDay?.utilization ?? 0,
-            weeklyResetsAt: parseDate(decoded.sevenDay?.resetsAt) ?? Date(),
+            weeklyResetsAt: weeklyResetsAt ?? Date(),
             scopedLimits: scopedLimits,
-            lastUpdated: Date()
+            lastUpdated: Date(),
+            reportedSessionResetsAt: sessionResetsAt,
+            reportedWeeklyResetsAt: weeklyResetsAt
         )
     }
 

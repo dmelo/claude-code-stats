@@ -5,14 +5,25 @@ struct UsageSnapshot: Codable {
     let timestamp: Date
     /// The aimux profile name, or "default" for the plain no-aimux login.
     let account: String
-    /// The account's Keychain service, which is what tells logins apart: two
-    /// profiles never share one, while a profile name says nothing about which
-    /// login sat behind it before a rename.
+    /// The account's Keychain service, which identifies the config dir the
+    /// reading came from, not the Claude login inside it: a `/login` to another
+    /// account in the same dir keeps the same ID, and the plain no-aimux login
+    /// shares the bare one with aimux's source profile.
     let accountID: String
     let sessionUsage: Double
-    let sessionResetsAt: Date
+    /// Absent when the API reported no reset time for the window.
+    let sessionResetsAt: Date?
     let weeklyUsage: Double
-    let weeklyResetsAt: Date
+    let weeklyResetsAt: Date?
+    /// Absent on lines written before scoped limits were logged.
+    let scopedLimits: [ScopedLimitSnapshot]?
+}
+
+/// A per-model weekly limit (e.g. Fable) within a snapshot.
+struct ScopedLimitSnapshot: Codable {
+    let name: String
+    let usage: Double
+    let resetsAt: Date?
 }
 
 // Appends every account's readings to a JSON Lines log, one snapshot per line.
@@ -57,9 +68,12 @@ class UsageHistoryService {
             account: account.profileName ?? "default",
             accountID: account.id,
             sessionUsage: usage.sessionUsage,
-            sessionResetsAt: usage.sessionResetsAt,
+            sessionResetsAt: usage.reportedSessionResetsAt,
             weeklyUsage: usage.weeklyUsage,
-            weeklyResetsAt: usage.weeklyResetsAt
+            weeklyResetsAt: usage.reportedWeeklyResetsAt,
+            scopedLimits: usage.scopedLimits.map {
+                ScopedLimitSnapshot(name: $0.name, usage: $0.usage, resetsAt: $0.reportedResetsAt)
+            }
         )
         do {
             try append(snapshot)
@@ -88,9 +102,18 @@ class UsageHistoryService {
             try line.write(to: storageURL, options: .atomic)
             return
         }
-        let handle = try FileHandle(forWritingTo: storageURL)
+        let handle = try FileHandle(forUpdating: storageURL)
         defer { try? handle.close() }
-        try handle.seekToEnd()
+        // A write cut short (the app killed mid-line) leaves no trailing newline.
+        // Start on a fresh line, or this sample is glued onto the torn one and
+        // lost with it.
+        let end = try handle.seekToEnd()
+        if end > 0 {
+            try handle.seek(toOffset: end - 1)
+            if try handle.read(upToCount: 1) != Data([UInt8(ascii: "\n")]) {
+                line.insert(UInt8(ascii: "\n"), at: 0)
+            }
+        }
         try handle.write(contentsOf: line)
     }
 }
