@@ -6,6 +6,9 @@ struct ScopedUsageLimit: Identifiable {
     let name: String
     let usage: Double
     let resetsAt: Date
+    /// `resetsAt` as the API sent it — nil when it sent none and `resetsAt` is
+    /// only a display fallback. The history log records this one.
+    var reportedResetsAt: Date? = nil
 
     var id: String { name }
 }
@@ -17,6 +20,11 @@ struct WebUsageData {
     let weeklyResetsAt: Date
     let scopedLimits: [ScopedUsageLimit]
     let lastUpdated: Date
+    /// The reset times as the API sent them. The non-optional pair above falls
+    /// back to now when a window has none, which is fine to display and wrong
+    /// to log: it reads as a reset on every sample.
+    var reportedSessionResetsAt: Date? = nil
+    var reportedWeeklyResetsAt: Date? = nil
 
     static var empty: WebUsageData {
         WebUsageData(
