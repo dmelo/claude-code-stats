@@ -10,6 +10,8 @@ struct UsageSnapshot: Codable {
     /// account in the same dir keeps the same ID, and the plain no-aimux login
     /// shares the bare one with aimux's source profile.
     let accountID: String
+    /// The API's figure, or 0 when it reported none. An absent window is
+    /// absent whole, so a missing reset time beside it marks that 0 as a fill.
     let sessionUsage: Double
     /// Absent when the API reported no reset time for the window.
     let sessionResetsAt: Date?
@@ -58,7 +60,8 @@ class UsageHistoryService {
 
     func record(_ usage: WebUsageData, for account: ClaudeAccount) {
         let now = Date()
-        // Deduplicate: skip if this account's last snapshot is less than 60 seconds old
+        // Deduplicate: skip if this process recorded the account under 60 seconds
+        // ago. Kept in memory only, so a relaunch can log one sample early.
         if let last = lastRecorded[account.id], now.timeIntervalSince(last) < 60 {
             return
         }
@@ -83,26 +86,16 @@ class UsageHistoryService {
         }
     }
 
-    func loadHistory() -> [UsageSnapshot] {
-        guard let data = try? Data(contentsOf: storageURL) else { return [] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        // Line by line, so a line cut short by a crash mid-write costs only itself.
-        return data.split(separator: UInt8(ascii: "\n")).compactMap {
-            try? decoder.decode(UsageSnapshot.self, from: Data($0))
-        }
-    }
-
     private func append(_ snapshot: UsageSnapshot) throws {
         var line = try encoder.encode(snapshot)
         line.append(UInt8(ascii: "\n"))
-        // Only a missing file is created here. Any other failure to open must
-        // throw, or a write would replace the whole history with one line.
-        guard fileManager.fileExists(atPath: storageURL.path) else {
-            try line.write(to: storageURL, options: .atomic)
-            return
-        }
-        let handle = try FileHandle(forUpdating: storageURL)
+        // O_APPEND makes the kernel place every write at the current end, so two
+        // running copies of the app (an installed build beside a dev build) can't
+        // land on the same offset and overwrite each other's lines. O_CREAT
+        // creates the file on first use and never truncates an existing one.
+        let fd = open(storageURL.path, O_RDWR | O_APPEND | O_CREAT, 0o644)
+        guard fd >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
         defer { try? handle.close() }
         // A write cut short (the app killed mid-line) leaves no trailing newline.
         // Start on a fresh line, or this sample is glued onto the torn one and
