@@ -82,11 +82,13 @@ class UsageHistoryService {
     private func append(_ snapshot: UsageSnapshot) throws {
         var line = try encoder.encode(snapshot)
         line.append(UInt8(ascii: "\n"))
-        guard let handle = try? FileHandle(forWritingTo: storageURL) else {
-            // First sample: the file doesn't exist yet.
+        // Only a missing file is created here. Any other failure to open must
+        // throw, or a write would replace the whole history with one line.
+        guard fileManager.fileExists(atPath: storageURL.path) else {
             try line.write(to: storageURL, options: .atomic)
             return
         }
+        let handle = try FileHandle(forWritingTo: storageURL)
         defer { try? handle.close() }
         try handle.seekToEnd()
         try handle.write(contentsOf: line)
