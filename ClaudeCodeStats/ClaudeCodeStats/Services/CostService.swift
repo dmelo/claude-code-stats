@@ -275,10 +275,11 @@ actor CostService {
     }
 
     func fetchSpend() -> SpendData {
-        for path in transcriptPaths() {
+        let paths = transcriptPaths()
+        for path in paths {
             scan(path: path)
         }
-        prune()
+        prune(keeping: Set(paths))
         // Most refreshes find nothing new, and the cache is rewritten whole.
         // Stays dirty if the write fails, so the next refresh retries it instead
         // of dropping this session's work on the floor.
@@ -292,12 +293,21 @@ actor CostService {
 
     private func transcriptPaths() -> [String] {
         let home = fileManager.homeDirectoryForCurrentUser.path
-        let roots: [String]
+        // CLAUDE_CONFIG_DIR adds a root, never replaces the defaults: the app
+        // inherits it when launched from a session running under an aimux
+        // profile, and a replacement silently dropped ~/.claude and every
+        // mirrored host from spend. Roots are compared by their resolved
+        // projects dir, since an aimux profile's can be a symlink to
+        // ~/.claude/projects and the same files would otherwise be read twice
+        // under two paths.
+        var roots = ["\(home)/.claude", "\(home)/.config/claude"]
         if let configured = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"], !configured.isEmpty {
-            roots = [configured]
-        } else {
-            roots = ["\(home)/.claude", "\(home)/.config/claude"]
+            roots.append(configured)
         }
+        var seen = Set<String>()
+        let projectDirs = roots
+            .map { URL(fileURLWithPath: "\($0)/projects").resolvingSymlinksInPath().path }
+            .filter { seen.insert($0).inserted }
 
         // Sorted because `ingest` pins an entry's day the first time it sees it,
         // and the enumerator's order isn't guaranteed. An entry whose copies
@@ -305,8 +315,7 @@ actor CostService {
         // depending on which transcript happened to be read first — a decision
         // the cache then keeps. Copies can be minutes apart, so the window is
         // real even though no entry currently spans two days.
-        return roots.flatMap { root -> [String] in
-            let projects = "\(root)/projects"
+        return projectDirs.flatMap { projects -> [String] in
             guard let walker = fileManager.enumerator(atPath: projects) else { return [] }
             return walker.compactMap { entry in
                 guard let name = entry as? String, name.hasSuffix(".jsonl") else { return nil }
@@ -550,7 +559,7 @@ actor CostService {
 
     // MARK: - Persistence
 
-    private func prune() {
+    private func prune(keeping scanned: Set<String>) {
         let calendar = Calendar.current
         guard let cutoff = calendar.date(byAdding: .day, value: -retentionDays, to: calendar.startOfDay(for: Date()))
         else { return }
@@ -561,10 +570,12 @@ actor CostService {
             cache.days[day] = nil
             isDirty = true
         }
-        // Transcripts Claude Code has since deleted would otherwise keep their
-        // offsets forever.
+        // Transcripts Claude Code has since deleted, and paths no root reaches
+        // any more (an old CLAUDE_CONFIG_DIR spelling of a symlinked dir), would
+        // otherwise keep their offsets forever. A file that comes back is
+        // re-read from the start, which entries' hashes make harmless.
         let offsetsBefore = cache.offsets.count
-        cache.offsets = cache.offsets.filter { fileManager.fileExists(atPath: $0.key) }
+        cache.offsets = cache.offsets.filter { scanned.contains($0.key) }
         if cache.offsets.count != offsetsBefore { isDirty = true }
     }
 
