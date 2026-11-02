@@ -184,7 +184,11 @@ private let chartWindowDays = 30
 /// 10: added Opus 5.5 and Sonnet 5.5. Both were matching their 5.0 rows; Opus
 /// 5.5 was billed at 5/25 with reads at 0.1× instead of 4/20 with reads at
 /// 0.05×, overstating it 1.62–1.75× on the two days checked against ccusage.
-private let cacheVersion = 10
+/// 11: offsets are keyed by the resolved projects dir. A cache built through a
+/// symlinked spelling would otherwise re-read every file under the new key,
+/// and re-reading entries older than `retentionDays` counts their tokens into
+/// the lifetime re-read totals a second time.
+private let cacheVersion = 11
 
 private struct EntryCost: Codable {
     let model: String
@@ -275,10 +279,11 @@ actor CostService {
     }
 
     func fetchSpend() -> SpendData {
-        for path in transcriptPaths() {
+        let paths = transcriptPaths()
+        for path in paths {
             scan(path: path)
         }
-        prune()
+        prune(keeping: Set(paths))
         // Most refreshes find nothing new, and the cache is rewritten whole.
         // Stays dirty if the write fails, so the next refresh retries it instead
         // of dropping this session's work on the floor.
@@ -292,12 +297,23 @@ actor CostService {
 
     private func transcriptPaths() -> [String] {
         let home = fileManager.homeDirectoryForCurrentUser.path
-        let roots: [String]
+        // Every root is scanned whatever the launch environment: the defaults,
+        // each aimux profile's config dir, and CLAUDE_CONFIG_DIR. The variable
+        // is inherited when the app is launched from a session running under an
+        // aimux profile, and used to replace the defaults, which silently
+        // dropped ~/.claude and every mirrored host from spend. Roots are
+        // compared by their resolved projects dir, since an aimux profile's can
+        // be a symlink to ~/.claude/projects and the same files would otherwise
+        // be read twice under two paths.
+        var roots = ["\(home)/.claude", "\(home)/.config/claude"]
+        roots += AimuxService.discoverAccounts().map(\.configDir)
         if let configured = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"], !configured.isEmpty {
-            roots = [configured]
-        } else {
-            roots = ["\(home)/.claude", "\(home)/.config/claude"]
+            roots.append(configured)
         }
+        var seen = Set<String>()
+        let projectDirs = roots
+            .map { URL(fileURLWithPath: "\($0)/projects").resolvingSymlinksInPath().path }
+            .filter { seen.insert($0).inserted }
 
         // Sorted because `ingest` pins an entry's day the first time it sees it,
         // and the enumerator's order isn't guaranteed. An entry whose copies
@@ -305,8 +321,7 @@ actor CostService {
         // depending on which transcript happened to be read first — a decision
         // the cache then keeps. Copies can be minutes apart, so the window is
         // real even though no entry currently spans two days.
-        return roots.flatMap { root -> [String] in
-            let projects = "\(root)/projects"
+        return projectDirs.flatMap { projects -> [String] in
             guard let walker = fileManager.enumerator(atPath: projects) else { return [] }
             return walker.compactMap { entry in
                 guard let name = entry as? String, name.hasSuffix(".jsonl") else { return nil }
@@ -550,7 +565,7 @@ actor CostService {
 
     // MARK: - Persistence
 
-    private func prune() {
+    private func prune(keeping scanned: Set<String>) {
         let calendar = Calendar.current
         guard let cutoff = calendar.date(byAdding: .day, value: -retentionDays, to: calendar.startOfDay(for: Date()))
         else { return }
@@ -561,10 +576,17 @@ actor CostService {
             cache.days[day] = nil
             isDirty = true
         }
-        // Transcripts Claude Code has since deleted would otherwise keep their
-        // offsets forever.
+        // Drops offsets for transcripts Claude Code has since deleted, and for
+        // another spelling of a file this scan read (an old symlinked path), which
+        // would otherwise stay forever. An existing file this scan didn't reach
+        // keeps its offset: a failed directory walk would otherwise force a full
+        // re-read, which recounts old entries in the lifetime re-read totals.
         let offsetsBefore = cache.offsets.count
-        cache.offsets = cache.offsets.filter { fileManager.fileExists(atPath: $0.key) }
+        cache.offsets = cache.offsets.filter { path, _ in
+            if scanned.contains(path) { return true }
+            guard fileManager.fileExists(atPath: path) else { return false }
+            return !scanned.contains(URL(fileURLWithPath: path).resolvingSymlinksInPath().path)
+        }
         if cache.offsets.count != offsetsBefore { isDirty = true }
     }
 
