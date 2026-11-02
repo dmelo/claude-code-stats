@@ -73,16 +73,19 @@ struct ClaudeCodeStatsApp: App {
         // which it does from two profiles up. A lone remaining profile that was
         // hidden earlier would otherwise vanish with no way back.
         let hidden = accounts.count > 1 ? ProfilePreferences.hidden(from: hiddenProfilesRaw) : []
-        // A profile left with no rings (only F selected, plan has no Fable
-        // limit) is dropped rather than drawn as a bare name — and dropped
-        // before deciding on names, so a lone survivor is drawn without one.
-        let shown = accounts
+        let visible = accounts
             .filter { account in account.profileName.map { !hidden.contains($0) } ?? true }
+        // A profile left with no rings (its plan lacks every selected limit:
+        // no Fable limit, or no 5-hour window on a verified Ultra plan) is
+        // dropped rather than drawn as a bare name. Names are still decided by
+        // the visible profiles, so a lone survivor keeps its name and isn't
+        // read as the other profile's rings.
+        let shown = visible
             .map { account in (account, rings(for: account)) }
             .filter { !$0.1.isEmpty }
         return shown.map { account, rings in
             RingGroup(
-                name: shown.count > 1 ? ProfilePreferences.label(for: account, in: labels) : nil,
+                name: visible.count > 1 ? ProfilePreferences.label(for: account, in: labels) : nil,
                 rings: rings
             )
         }
@@ -92,22 +95,27 @@ struct ClaudeCodeStatsApp: App {
         let state = viewModel.usageByAccount[account.id]
         let usage = state?.needsLogin == true ? nil : state?.usage
         var rings: [RingSegment] = []
-        if showSession { rings.append(RingSegment(label: "S", progress: usage?.sessionUsage)) }
+        if showSession, let ring = optionalRing("S", usage, { $0.sessionUsage }) { rings.append(ring) }
         if showWeekly { rings.append(RingSegment(label: "W", progress: usage?.weeklyUsage)) }
-        // Not every plan carries a Fable limit; an account whose reading has
-        // none gets no F ring rather than an empty one. With no reading at all
-        // we can't tell, so it gets the dashed ring like S and W — otherwise an
-        // F-only bar would silently drop every login it can't read.
-        if showFable {
-            if let usage {
-                if let fable = usage.scopedLimits.first(where: { $0.name == "Fable" }) {
-                    rings.append(RingSegment(label: "F", progress: fable.usage))
-                }
-            } else {
-                rings.append(RingSegment(label: "F", progress: nil))
-            }
+        if showFable,
+           let ring = optionalRing("F", usage, { $0.scopedLimits.first { $0.name == "Fable" }?.usage }) {
+            rings.append(ring)
         }
         return rings
+    }
+
+    // A ring for a limit not every plan has: the 5-hour window (absent on
+    // verified Ultra) and Fable. An account whose reading lacks the limit gets
+    // no ring rather than an empty one. With no reading at all we can't tell,
+    // so it gets the dashed ring like W — otherwise a bar of only these rings
+    // would silently drop every login it can't read.
+    private func optionalRing(
+        _ label: String,
+        _ usage: WebUsageData?,
+        _ value: (WebUsageData) -> Double?
+    ) -> RingSegment? {
+        guard let usage else { return RingSegment(label: label, progress: nil) }
+        return value(usage).map { RingSegment(label: label, progress: $0) }
     }
 
     private func renderRings(_ groups: [RingGroup]) -> NSImage {

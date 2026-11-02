@@ -10,9 +10,10 @@ struct UsageSnapshot: Codable {
     /// account in the same dir keeps the same ID, and the plain no-aimux login
     /// shares the bare one with aimux's source profile.
     let accountID: String
-    /// The API's figure, or 0 when it reported none. An absent window is
-    /// absent whole, so a missing reset time beside it marks that 0 as a fill.
-    let sessionUsage: Double
+    /// The API's figure; absent when the account has no 5-hour window
+    /// (verified Ultra). Lines written before that change hold 0 instead, with
+    /// no reset time beside it.
+    let sessionUsage: Double?
     /// Absent when the API reported no reset time for the window.
     let sessionResetsAt: Date?
     let weeklyUsage: Double

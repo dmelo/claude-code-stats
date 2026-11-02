@@ -405,10 +405,16 @@ class OAuthUsageService {
             )
         }
 
-        let sessionResetsAt = parseDate(decoded.fiveHour?.resetsAt)
+        // Verified Ultra accounts have no 5-hour window: `five_hour` is null and
+        // `limits` has no "session" entry. Either source is enough to show one,
+        // so a window reported in only one place isn't hidden; a null
+        // utilization counts as no window, as Claude Code's own /usage treats it.
+        let sessionLimit = decoded.limits?.first { $0.kind == "session" }
+        let sessionUsage = decoded.fiveHour?.utilization ?? sessionLimit?.percent
+        let sessionResetsAt = parseDate(decoded.fiveHour?.resetsAt ?? sessionLimit?.resetsAt)
         let weeklyResetsAt = parseDate(decoded.sevenDay?.resetsAt)
         return WebUsageData(
-            sessionUsage: decoded.fiveHour?.utilization ?? 0,
+            sessionUsage: sessionUsage,
             sessionResetsAt: sessionResetsAt ?? Date(),
             weeklyUsage: decoded.sevenDay?.utilization ?? 0,
             weeklyResetsAt: weeklyResetsAt ?? Date(),

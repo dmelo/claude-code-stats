@@ -33,7 +33,9 @@ struct AccountUsageCardView: View {
 
     private func limitRows(_ usage: WebUsageData) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            limitRow(title: "Session", usage: usage.sessionUsage, resetsAt: usage.sessionResetsAt)
+            if let session = usage.sessionUsage {
+                limitRow(title: "Session", usage: session, resetsAt: usage.sessionResetsAt)
+            }
             limitRow(title: "Weekly", usage: usage.weeklyUsage, resetsAt: usage.weeklyResetsAt)
             ForEach(usage.scopedLimits) { limit in
                 limitRow(title: limit.name, usage: limit.usage, resetsAt: limit.resetsAt)

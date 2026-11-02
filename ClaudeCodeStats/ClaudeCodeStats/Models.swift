@@ -14,7 +14,10 @@ struct ScopedUsageLimit: Identifiable {
 }
 
 struct WebUsageData {
-    let sessionUsage: Double
+    /// nil when the account has no 5-hour window: verified Ultra accounts
+    /// report `five_hour: null`. Decided per reading, not per plan, because an
+    /// Ultra account keeps the window until Anthropic verifies it.
+    let sessionUsage: Double?
     let sessionResetsAt: Date
     let weeklyUsage: Double
     let weeklyResetsAt: Date
@@ -25,17 +28,6 @@ struct WebUsageData {
     /// to log: it reads as a reset on every sample.
     var reportedSessionResetsAt: Date? = nil
     var reportedWeeklyResetsAt: Date? = nil
-
-    static var empty: WebUsageData {
-        WebUsageData(
-            sessionUsage: 0,
-            sessionResetsAt: Date(),
-            weeklyUsage: 0,
-            weeklyResetsAt: Date(),
-            scopedLimits: [],
-            lastUpdated: Date()
-        )
-    }
 }
 
 // What a model's tokens would have cost at API rates over a window.
