@@ -28,17 +28,6 @@ struct WebUsageData {
     /// to log: it reads as a reset on every sample.
     var reportedSessionResetsAt: Date? = nil
     var reportedWeeklyResetsAt: Date? = nil
-
-    static var empty: WebUsageData {
-        WebUsageData(
-            sessionUsage: nil,
-            sessionResetsAt: Date(),
-            weeklyUsage: 0,
-            weeklyResetsAt: Date(),
-            scopedLimits: [],
-            lastUpdated: Date()
-        )
-    }
 }
 
 // What a model's tokens would have cost at API rates over a window.

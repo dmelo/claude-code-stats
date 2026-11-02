@@ -7,9 +7,9 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 ## Features
 
 - **Real-time usage data** - Shows your actual usage from Anthropic's servers
-- **Current Session** - 5-hour rolling window usage with reset countdown
+- **Current Session** - 5-hour rolling window usage with reset countdown (hidden on plans without one, such as verified Ultra)
 - **Weekly Limits** - All models combined usage with reset time, plus any per-model weekly limit your plan has (e.g. Fable)
-- **Menu bar rings** - Optional session (S), weekly (W) and Fable (F) rings drawn right in the menu bar, coloured by how close each limit is
+- **Menu bar rings** - Optional session (S), weekly (W) and Fable (F) rings drawn right in the menu bar, coloured by how close each limit is. A profile whose plan lacks a limit gets no ring for it
 - **Multiple accounts (aimux)** - If you switch between Claude subscriptions with [aimux](https://github.com/Digital-Threads/aimux), every Claude profile gets its own limits in the popover and its own named rings in the menu bar — see [Multiple accounts](#multiple-accounts-aimux)
 - **API-equivalent spend** - What your token usage would have cost at API rates: today, the last 7 days, and the last 30 days, with a per-model breakdown and a 30-day chart you can hover for any day's figure. Read from Claude Code's own transcripts on disk, so it needs no extra tooling and makes no network calls
 - **RTK savings** - If you run your dev commands through RTK (Rust Token Killer), shows how many tool-output tokens it kept out of Claude Code's context: today, the last 7 days, and the last 30 days, plus a lifetime total, an average-reduction meter, and an API-equivalent value range. The range spans a conservative floor (each saved token priced once) and an optimistic ceiling (adding the re-billing an unfiltered result would incur, scaled by your own observed cache re-read rate). Read from RTK's local history database, so it appears only when RTK is installed and makes no network calls
@@ -81,7 +81,7 @@ Click the menu bar icon to see your current usage:
 
 | Metric | Description |
 |--------|-------------|
-| **Current Session** | Usage in the current 5-hour window |
+| **Current Session** | Usage in the current 5-hour window (absent on plans without one) |
 | **Weekly Limit** | Combined usage across all models (resets weekly) |
 | **Weekly Limit (model)** | A per-model weekly limit, when your plan has one (e.g. Fable) |
 
