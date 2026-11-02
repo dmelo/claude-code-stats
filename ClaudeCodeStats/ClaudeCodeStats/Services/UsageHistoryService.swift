@@ -70,7 +70,7 @@ class UsageHistoryService {
             timestamp: now,
             account: account.profileName ?? "default",
             accountID: account.id,
-            sessionUsage: usage.sessionUsage,
+            sessionUsage: usage.sessionUsage ?? 0,
             sessionResetsAt: usage.reportedSessionResetsAt,
             weeklyUsage: usage.weeklyUsage,
             weeklyResetsAt: usage.reportedWeeklyResetsAt,

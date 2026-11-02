@@ -92,7 +92,17 @@ struct ClaudeCodeStatsApp: App {
         let state = viewModel.usageByAccount[account.id]
         let usage = state?.needsLogin == true ? nil : state?.usage
         var rings: [RingSegment] = []
-        if showSession { rings.append(RingSegment(label: "S", progress: usage?.sessionUsage)) }
+        // Same rule as F below: an account whose reading has no 5-hour window
+        // (verified Ultra) gets no S ring; no reading at all keeps the dashed one.
+        if showSession {
+            if let usage {
+                if let session = usage.sessionUsage {
+                    rings.append(RingSegment(label: "S", progress: session))
+                }
+            } else {
+                rings.append(RingSegment(label: "S", progress: nil))
+            }
+        }
         if showWeekly { rings.append(RingSegment(label: "W", progress: usage?.weeklyUsage)) }
         // Not every plan carries a Fable limit; an account whose reading has
         // none gets no F ring rather than an empty one. With no reading at all

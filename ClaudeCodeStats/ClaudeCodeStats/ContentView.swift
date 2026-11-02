@@ -126,11 +126,13 @@ struct ContentView: View {
 
     private func usageView(_ usage: WebUsageData) -> some View {
         VStack(spacing: 8) {
-            UsageCardView(
-                title: "Current Session",
-                usage: usage.sessionUsage,
-                resetsAt: usage.sessionResetsAt
-            )
+            if let session = usage.sessionUsage {
+                UsageCardView(
+                    title: "Current Session",
+                    usage: session,
+                    resetsAt: usage.sessionResetsAt
+                )
+            }
 
             UsageCardView(
                 title: "Weekly Limit (All Models)",

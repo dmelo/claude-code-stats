@@ -408,7 +408,9 @@ class OAuthUsageService {
         let sessionResetsAt = parseDate(decoded.fiveHour?.resetsAt)
         let weeklyResetsAt = parseDate(decoded.sevenDay?.resetsAt)
         return WebUsageData(
-            sessionUsage: decoded.fiveHour?.utilization ?? 0,
+            // A present window with no utilization is still a session at 0%;
+            // only a missing window means the account has none.
+            sessionUsage: decoded.fiveHour.map { $0.utilization ?? 0 },
             sessionResetsAt: sessionResetsAt ?? Date(),
             weeklyUsage: decoded.sevenDay?.utilization ?? 0,
             weeklyResetsAt: weeklyResetsAt ?? Date(),
