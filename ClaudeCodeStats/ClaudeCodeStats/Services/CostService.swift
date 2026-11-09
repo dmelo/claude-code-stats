@@ -68,7 +68,10 @@ private struct ModelPrice {
         self.longPrompt = longPrompt
     }
 
-    func rate(on date: Date) -> Rate {
+    /// The rate one request is billed at. `promptTokens` has no default so that
+    /// no caller can silently skip the long-prompt test.
+    func rate(on date: Date, promptTokens: Double) -> Rate {
+        if let longPrompt, promptTokens > longPrompt.above { return longPrompt.rate }
         if let intro, date < intro.until { return intro.rate }
         return standard
     }
@@ -82,8 +85,13 @@ private struct ModelPrice {
 /// to ~97% of the input-side tokens across a long Claude Code corpus, and at
 /// that mix the shared 0.1× overstates the total by about 1.7× — a large error,
 /// but not the "severalfold" an earlier draft of this comment claimed.
-private let cheapCacheReadRate = Rate(
+private let fable51Rate = Rate(
     input: 10, output: 50, cacheReadMultiplier: discountedCacheReadMultiplier)
+
+/// Fable 5.2 and Mythos 5.2: cheaper than 5.1 on every component (8/40), with
+/// cache reads at the same 0.025× — $0.20 per million.
+private let fable52Rate = Rate(
+    input: 8, output: 40, cacheReadMultiplier: discountedCacheReadMultiplier)
 
 // Matched by prefix, not equality: some models appear in transcripts with a date
 // suffix (claude-haiku-4-5-20251001) and others bare (claude-opus-4-8). A model
@@ -101,8 +109,10 @@ private let cheapCacheReadRate = Rate(
 // which none of these prefixes match. That is untested rather than deliberate:
 // this app reads spend for an account authenticated by OAuth, so a Bedrock-only
 // setup has no usage to show it in the first place, and adding a normalisation
-// nothing here can exercise would be guessing. Vertex needs nothing — its
-// "claude-opus-4-5@20251101" still prefix-matches.
+// nothing here can exercise would be guessing. Vertex mostly needs nothing —
+// "claude-opus-4-5@20251101" still prefix-matches — except the original Opus 4
+// and Sonnet 4, which are "claude-opus-4@20250514" and "claude-sonnet-4@20250514"
+// there and match no row, so they are skipped.
 //
 // Sorted by descending prefix length so the longest match wins wherever a row is
 // written. First-match ordering is a live trap, not a hypothetical one:
@@ -114,10 +124,10 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     // Fable and Mythos are the same model under two names, hence the same rates.
     // 5.2 is cheaper than 5.1 on every component; without its own row it matched
     // "claude-fable-5" and was billed as Fable 5.
-    ("claude-fable-5-2", ModelPrice(display: "Fable 5.2", standard: Rate(input: 8, output: 40, cacheReadMultiplier: discountedCacheReadMultiplier))),
-    ("claude-mythos-5-2", ModelPrice(display: "Mythos 5.2", standard: Rate(input: 8, output: 40, cacheReadMultiplier: discountedCacheReadMultiplier))),
-    ("claude-fable-5-1", ModelPrice(display: "Fable 5.1", standard: cheapCacheReadRate)),
-    ("claude-mythos-5-1", ModelPrice(display: "Mythos 5.1", standard: cheapCacheReadRate)),
+    ("claude-fable-5-2", ModelPrice(display: "Fable 5.2", standard: fable52Rate)),
+    ("claude-mythos-5-2", ModelPrice(display: "Mythos 5.2", standard: fable52Rate)),
+    ("claude-fable-5-1", ModelPrice(display: "Fable 5.1", standard: fable51Rate)),
+    ("claude-mythos-5-1", ModelPrice(display: "Mythos 5.1", standard: fable51Rate)),
     ("claude-fable-5", ModelPrice(display: "Fable 5", standard: Rate(input: 10, output: 50))),
     ("claude-mythos-5", ModelPrice(display: "Mythos 5", standard: Rate(input: 10, output: 50))),
 
@@ -263,7 +273,7 @@ actor CostService {
     /// conservative: it ignores both pricier models and the multi-turn re-billing
     /// that inflates a tool result's true cost, so figures built on it are floors.
     static func representativeInputRate() -> Double {
-        price(for: "claude-opus-4-8")?.rate(on: Date()).input ?? 5
+        price(for: "claude-opus-4-8")?.rate(on: Date(), promptTokens: 0).input ?? 5
     }
 
     private let fileManager = FileManager.default
@@ -455,19 +465,17 @@ actor CostService {
             (dict[key] as? NSNumber)?.doubleValue ?? 0
         }
 
-        var rate = price.rate(on: date)
-        if let longPrompt = price.longPrompt {
-            let prompt = tokens(usage, "input_tokens")
-                + tokens(usage, "cache_read_input_tokens")
-                + tokens(usage, "cache_creation_input_tokens")
-            if prompt > longPrompt.above { rate = longPrompt.rate }
-        }
+        let inputTokens = tokens(usage, "input_tokens")
+        let cacheReadTokens = tokens(usage, "cache_read_input_tokens")
+        let rate = price.rate(
+            on: date,
+            promptTokens: inputTokens + cacheReadTokens + tokens(usage, "cache_creation_input_tokens"))
         let input = rate.input / 1_000_000
         let output = rate.output / 1_000_000
 
-        var total = tokens(usage, "input_tokens") * input
+        var total = inputTokens * input
         total += tokens(usage, "output_tokens") * output
-        total += tokens(usage, "cache_read_input_tokens") * input * rate.cacheReadMultiplier
+        total += cacheReadTokens * input * rate.cacheReadMultiplier
 
         if let creation = usage["cache_creation"] as? [String: Any] {
             total += tokens(creation, "ephemeral_5m_input_tokens") * input * cacheWrite5mMultiplier
