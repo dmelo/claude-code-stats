@@ -19,9 +19,9 @@ import Foundation
 // numbers are interpreted against should be in view before it starts.
 private let standardCacheReadMultiplier = 0.10
 private let discountedCacheReadMultiplier = 0.025
-/// Opus 5.5 reads at $0.20 against a $4 input rate. Its writes stay on the
-/// universal 1.25×/2× ($5 and $8).
-private let opus55CacheReadMultiplier = 0.05
+/// Opus 5.5 reads at $0.20 against a $4 input rate, Sonnet 5.5 at $0.10 against
+/// $2. Their writes stay on the universal 1.25×/2×.
+private let reducedCacheReadMultiplier = 0.05
 private let cacheWrite5mMultiplier = 1.25
 private let cacheWrite1hMultiplier = 2.00
 
@@ -29,8 +29,8 @@ private struct Rate {
     let input: Double
     let output: Double
     /// What a cache read costs as a multiple of `input`. Per-model rather than a
-    /// shared constant because Fable 5.1 and Mythos 5.1 read at 0.025× and
-    /// Opus 5.5 at 0.05×, while every other model reads at 0.1× — the catalogue
+    /// shared constant because Fable and Mythos 5.1 and 5.2 read at 0.025× and
+    /// Opus 5.5 and Sonnet 5.5 at 0.05×, while every other model reads at 0.1× — the catalogue
     /// gives each its own pricing tier, so the multiplier travels with the rate.
     let cacheReadMultiplier: Double
 
@@ -55,11 +55,17 @@ private struct ModelPrice {
     /// promotions recur, and it is the only thing that keeps a past entry priced
     /// at the rate that was actually in force on the day it ran.
     let intro: (rate: Rate, until: Date)?
+    /// A higher rate that bills the whole request once its prompt — input plus
+    /// cache reads plus cache writes — exceeds `above` tokens. Only Haiku 5.5
+    /// has one; the threshold test is the CLI's own (`aB` in 2.1.321).
+    let longPrompt: (above: Double, rate: Rate)?
 
-    init(display: String, standard: Rate, intro: (rate: Rate, until: Date)? = nil) {
+    init(display: String, standard: Rate, intro: (rate: Rate, until: Date)? = nil,
+         longPrompt: (above: Double, rate: Rate)? = nil) {
         self.display = display
         self.standard = standard
         self.intro = intro
+        self.longPrompt = longPrompt
     }
 
     func rate(on date: Date) -> Rate {
@@ -89,7 +95,7 @@ private let cheapCacheReadRate = Rate(
 // first place. Enumerating from it rather than from the models seen so far is
 // what turned up the Mythos family and the retired 4.x ids, none of which this
 // table had ever heard of. Anthropic's published pricing agrees with that
-// catalogue rate for rate, both checked 2026-09-03.
+// catalogue rate for rate, both last checked 2026-11-09 (CLI 2.1.321).
 //
 // The catalogue also carries Bedrock ids ("us.anthropic.claude-opus-4-5-…"),
 // which none of these prefixes match. That is untested rather than deliberate:
@@ -106,6 +112,10 @@ private let cheapCacheReadRate = Rate(
 // the five 4.x rows below it, and "claude-sonnet-4" over two.
 private let priceTable: [(prefix: String, price: ModelPrice)] = [
     // Fable and Mythos are the same model under two names, hence the same rates.
+    // 5.2 is cheaper than 5.1 on every component; without its own row it matched
+    // "claude-fable-5" and was billed as Fable 5.
+    ("claude-fable-5-2", ModelPrice(display: "Fable 5.2", standard: Rate(input: 8, output: 40, cacheReadMultiplier: discountedCacheReadMultiplier))),
+    ("claude-mythos-5-2", ModelPrice(display: "Mythos 5.2", standard: Rate(input: 8, output: 40, cacheReadMultiplier: discountedCacheReadMultiplier))),
     ("claude-fable-5-1", ModelPrice(display: "Fable 5.1", standard: cheapCacheReadRate)),
     ("claude-mythos-5-1", ModelPrice(display: "Mythos 5.1", standard: cheapCacheReadRate)),
     ("claude-fable-5", ModelPrice(display: "Fable 5", standard: Rate(input: 10, output: 50))),
@@ -114,7 +124,7 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     // Cheaper than Opus 5 on every component, and "claude-opus-5" is a prefix of
     // it — so without its own row it was billed as Opus 5 (catalogue tier
     // tier_4_20_cache_read_0_20, CLI 2.1.284).
-    ("claude-opus-5-5", ModelPrice(display: "Opus 5.5", standard: Rate(input: 4, output: 20, cacheReadMultiplier: opus55CacheReadMultiplier))),
+    ("claude-opus-5-5", ModelPrice(display: "Opus 5.5", standard: Rate(input: 4, output: 20, cacheReadMultiplier: reducedCacheReadMultiplier))),
     ("claude-opus-5", ModelPrice(display: "Opus 5", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-8", ModelPrice(display: "Opus 4.8", standard: Rate(input: 5, output: 25))),
     ("claude-opus-4-7", ModelPrice(display: "Opus 4.7", standard: Rate(input: 5, output: 25))),
@@ -133,8 +143,8 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     // Sonnet 5 launched at 2/10 "through 2026-08-31"; Anthropic then made that
     // the standard price and cancelled the increase to 3/15. Carrying it as a
     // promotion that lapsed would have started overcharging it 50% on 09-01.
-    // Same tier as Sonnet 5; its own row only so it is labelled as itself.
-    ("claude-sonnet-5-5", ModelPrice(display: "Sonnet 5.5", standard: Rate(input: 2, output: 10))),
+    // Sonnet 5's 2/10, but cache reads at $0.10 rather than $0.20.
+    ("claude-sonnet-5-5", ModelPrice(display: "Sonnet 5.5", standard: Rate(input: 2, output: 10, cacheReadMultiplier: reducedCacheReadMultiplier))),
     ("claude-sonnet-5", ModelPrice(display: "Sonnet 5", standard: Rate(input: 2, output: 10))),
     ("claude-sonnet-4-6", ModelPrice(display: "Sonnet 4.6", standard: Rate(input: 3, output: 15))),
     ("claude-sonnet-4-5", ModelPrice(display: "Sonnet 4.5", standard: Rate(input: 3, output: 15))),
@@ -143,6 +153,9 @@ private let priceTable: [(prefix: String, price: ModelPrice)] = [
     ("claude-3-7-sonnet", ModelPrice(display: "Sonnet 3.7", standard: Rate(input: 3, output: 15))),
     ("claude-3-5-sonnet", ModelPrice(display: "Sonnet 3.5", standard: Rate(input: 3, output: 15))),
 
+    // The only model with a long-prompt rate: 5× across the board past 100k.
+    ("claude-haiku-5-5", ModelPrice(display: "Haiku 5.5", standard: Rate(input: 0.1, output: 0.5),
+                                    longPrompt: (above: 100_000, rate: Rate(input: 0.5, output: 2.5)))),
     ("claude-haiku-4-5", ModelPrice(display: "Haiku 4.5", standard: Rate(input: 1, output: 5))),
     ("claude-3-5-haiku", ModelPrice(display: "Haiku 3.5", standard: Rate(input: 0.8, output: 4))),
 ].sorted { $0.prefix.count > $1.prefix.count }
@@ -188,7 +201,11 @@ private let chartWindowDays = 30
 /// symlinked spelling would otherwise re-read every file under the new key,
 /// and re-reading entries older than `retentionDays` counts their tokens into
 /// the lifetime re-read totals a second time.
-private let cacheVersion = 11
+/// 12: added Fable 5.2, Mythos 5.2 and Haiku 5.5, and Sonnet 5.5's 0.05× cache
+/// reads. Fable 5.2 was matching the "claude-fable-5" row (10/50 instead of
+/// 8/40, reads at 0.1× instead of 0.025×), Haiku 5.5 was skipped outright, and
+/// Sonnet 5.5 was billed at Sonnet 5's 0.1× reads.
+private let cacheVersion = 12
 
 private struct EntryCost: Codable {
     let model: String
@@ -434,13 +451,19 @@ actor CostService {
     /// repeats the same tokens broken down per model turn — summing both would
     /// count every entry twice.
     private func cost(usage: [String: Any], price: ModelPrice, on date: Date) -> Double {
-        let rate = price.rate(on: date)
-        let input = rate.input / 1_000_000
-        let output = rate.output / 1_000_000
-
         func tokens(_ dict: [String: Any], _ key: String) -> Double {
             (dict[key] as? NSNumber)?.doubleValue ?? 0
         }
+
+        var rate = price.rate(on: date)
+        if let longPrompt = price.longPrompt {
+            let prompt = tokens(usage, "input_tokens")
+                + tokens(usage, "cache_read_input_tokens")
+                + tokens(usage, "cache_creation_input_tokens")
+            if prompt > longPrompt.above { rate = longPrompt.rate }
+        }
+        let input = rate.input / 1_000_000
+        let output = rate.output / 1_000_000
 
         var total = tokens(usage, "input_tokens") * input
         total += tokens(usage, "output_tokens") * output
