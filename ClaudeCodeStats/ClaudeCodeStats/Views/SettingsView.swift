@@ -11,7 +11,8 @@ struct SettingsView: View {
     @AppStorage(ProfilePreferences.labelsKey) private var profileLabelsRaw = ""
     // The view model's list, so Settings and the menu bar never disagree.
     private var accounts: [UsageAccount] { viewModel.accounts }
-    // Only these have a login to report on; Codex reads local files.
+    // The Claude logins, whose authentication this section reports. Codex's
+    // login problems show on its own card instead.
     private var claudeAccounts: [ClaudeAccount] { viewModel.claudeAccounts }
 
     var body: some View {

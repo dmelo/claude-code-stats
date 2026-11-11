@@ -95,7 +95,7 @@ class OAuthUsageService {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await withRetry {
+            (data, response) = try await Self.withRetry {
                 try await session.data(for: request)
             }
         } catch {
@@ -443,7 +443,9 @@ class OAuthUsageService {
             ?? Self.isoFormatterNoFraction.date(from: string)
     }
 
-    private func withRetry<T>(
+    /// Retries transient network failures with backoff. Static and nonisolated
+    /// so CodexUsageService, an actor, retries the same way.
+    nonisolated static func withRetry<T>(
         maxAttempts: Int = 3,
         initialDelay: TimeInterval = 0.5,
         _ operation: () async throws -> T
@@ -461,7 +463,7 @@ class OAuthUsageService {
         throw URLError(.unknown)
     }
 
-    private static func isTransientNetworkError(_ error: URLError) -> Bool {
+    private nonisolated static func isTransientNetworkError(_ error: URLError) -> Bool {
         switch error.code {
         case .secureConnectionFailed,
              .networkConnectionLost,

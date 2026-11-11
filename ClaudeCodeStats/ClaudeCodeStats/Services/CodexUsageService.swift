@@ -33,21 +33,34 @@ actor CodexUsageService {
         session = URLSession(configuration: config)
     }
 
+    /// `$CODEX_HOME/auth.json`, else ~/.codex/auth.json. The variable only
+    /// reaches the app when it is in the launch environment — a shell export
+    /// does not reach an app opened from Finder or as a login item; `launchctl
+    /// setenv CODEX_HOME …` does.
     nonisolated static var authPath: String {
-        let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"].flatMap { $0.isEmpty ? nil : $0 }
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex").path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        var codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? "\(home)/.codex"
+        if codexHome == "~" || codexHome.hasPrefix("~/") { codexHome = home + codexHome.dropFirst() }
         return codexHome + "/auth.json"
     }
 
-    /// Codex appears only where it has been logged in to with ChatGPT. An API
-    /// key login has no plan limits to show.
-    nonisolated static var isInstalled: Bool {
+    /// Codex appears only where it is logged in with ChatGPT. An API key login
+    /// has no plan limits to show.
+    nonisolated static var hasLogin: Bool {
         readLogin() != nil
+    }
+
+    /// Whether the login file exists at all, readable or not. Keeps Codex on
+    /// screen through a moment when Codex is rewriting the file mid-refresh.
+    nonisolated static var hasAuthFile: Bool {
+        FileManager.default.fileExists(atPath: authPath)
     }
 
     private struct Login {
         let accessToken: String
-        let accountID: String
+        /// Sent as `ChatGPT-Account-Id` when present.
+        let accountID: String?
         let expiresAt: Date?
     }
 
@@ -64,8 +77,8 @@ actor CodexUsageService {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         guard let tokens = (try? decoder.decode(AuthFile.self, from: data))?.tokens,
-              let token = tokens.accessToken, !token.isEmpty,
-              let account = tokens.accountId, !account.isEmpty else { return nil }
+              let token = tokens.accessToken, !token.isEmpty else { return nil }
+        let account = tokens.accountId.flatMap { $0.isEmpty ? nil : $0 }
         return Login(accessToken: token, accountID: account, expiresAt: expiry(of: token))
     }
 
@@ -91,19 +104,27 @@ actor CodexUsageService {
         var request = URLRequest(url: usageURL)
         request.httpMethod = "GET"
         request.setValue("Bearer \(login.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(login.accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
+        if let accountID = login.accountID {
+            request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
+        }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await session.data(for: request)
+            let session = self.session
+            (data, response) = try await OAuthUsageService.withRetry {
+                try await session.data(for: request)
+            }
         } catch {
             throw UsageError.networkError(error)
         }
         guard let http = response as? HTTPURLResponse else { throw UsageError.invalidResponse }
         switch http.statusCode {
         case 200...299: break
-        case 401, 403: throw UsageError.tokenExpired
+        // Only a 401 is read as a bad token. A 403 can also be a bot check or a
+        // refused account, which running codex can't fix, so it stays an
+        // ordinary failure and the last reading stays on screen.
+        case 401: throw UsageError.tokenExpired
         case 429: throw UsageError.rateLimited
         default: throw UsageError.invalidResponse
         }
@@ -126,25 +147,25 @@ actor CodexUsageService {
         }
     }
 
-    private static let sessionWindowSeconds = 5 * 3600
-    private static let weeklyWindowSeconds = 7 * 86400
-
     /// Windows are matched by length, not by primary/secondary: Codex's own
     /// session logs show some models reporting only a weekly window, as primary.
+    /// By range rather than exact seconds (18000 and 604800 today), so a window
+    /// a few seconds off, or a plan with a different length, still lands: under
+    /// a day is the session window, a day or more is weekly.
     static func parse(_ data: Data, at now: Date) -> WebUsageData? {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         guard let limits = (try? decoder.decode(Response.self, from: data))?.rateLimit else { return nil }
 
         let windows = [limits.primaryWindow, limits.secondaryWindow].compactMap { $0 }
-        func window(seconds: Int) -> (usage: Double, resetsAt: Date?)? {
-            guard let match = windows.first(where: { $0.limitWindowSeconds == seconds }),
+        func window(_ lengths: Range<Int>) -> (usage: Double, resetsAt: Date?)? {
+            guard let match = windows.first(where: { lengths.contains($0.limitWindowSeconds ?? -1) }),
                   let used = match.usedPercent else { return nil }
             return (used, match.resetAt.map { Date(timeIntervalSince1970: $0) })
         }
         // The card has no shape for a reading without a weekly window.
-        guard let weekly = window(seconds: weeklyWindowSeconds) else { return nil }
-        let session = window(seconds: sessionWindowSeconds)
+        guard let weekly = window(86400..<Int.max) else { return nil }
+        let session = window(1..<86400)
 
         return WebUsageData(
             sessionUsage: session?.usage,

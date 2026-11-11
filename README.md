@@ -80,7 +80,7 @@ To show rings in the menu bar instead of the chart icon, open Settings (the gear
 
 If the [Codex CLI](https://github.com/openai/codex) is signed in with ChatGPT on your Mac, a **Codex** card appears after your Claude accounts, and Codex gets its own `codex` rings in the menu bar (hide them or relabel them under Settings → Profiles). Nothing to configure:
 
-- **Where the numbers come from:** the same ChatGPT usage endpoint the Codex CLI uses, polled with your Claude limits, using the login Codex keeps in `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`). They match chatgpt.com's Usage page, including use from other machines and from the other ChatGPT surfaces that share the limits.
+- **Where the numbers come from:** the same ChatGPT usage endpoint the Codex CLI uses, polled with your Claude limits, using the login Codex keeps in `~/.codex/auth.json` (or `$CODEX_HOME/auth.json` — but a shell export doesn't reach an app opened from Finder or at login; use `launchctl setenv CODEX_HOME …`). They match chatgpt.com's Usage page, including use from other machines and from the other ChatGPT surfaces that share the limits.
 - **The login is only read.** The app never refreshes it; Codex does that whenever it runs. A Codex login lasts about ten days, so if you haven't run Codex on this Mac for that long the card asks you to run `codex` once.
 - **What isn't shown:** Codex spend. The spend card counts Claude only.
 

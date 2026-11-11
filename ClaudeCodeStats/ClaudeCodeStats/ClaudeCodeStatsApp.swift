@@ -51,8 +51,9 @@ struct ClaudeCodeStatsApp: App {
         .menuBarExtraStyle(.window)
     }
 
-    // One ring: its letter and fill, or nil progress for a login we can't read
-    // (expired, signed out, never fetched) — drawn dashed rather than as a
+    // One ring: its letter and fill, or nil progress when the figure is
+    // unknown — a login we can't read (expired, signed out, never fetched), or
+    // a window that reset since a stale reading — drawn dashed rather than as a
     // confident 0%.
     private struct RingSegment {
         let label: String
@@ -93,38 +94,39 @@ struct ClaudeCodeStatsApp: App {
 
     private func rings(for account: UsageAccount) -> [RingSegment] {
         let state = viewModel.usageByAccount[account.id]
-        let usage = state?.needsLogin == true ? nil : state?.usage
         let now = Date()
         var rings: [RingSegment] = []
-        if showSession, let ring = ring("S", usage, now, { reading in
+        if showSession, let ring = ring("S", state, now, { reading in
             reading.sessionUsage.map { ($0, reading.reportedSessionResetsAt) }
         }) { rings.append(ring) }
-        if showWeekly, let ring = ring("W", usage, now, { reading in
+        if showWeekly, let ring = ring("W", state, now, { reading in
             (reading.weeklyUsage, reading.reportedWeeklyResetsAt)
         }) { rings.append(ring) }
-        if showFable, let ring = ring("F", usage, now, { reading in
+        if showFable, let ring = ring("F", state, now, { reading in
             reading.scopedLimits.first { $0.name == "Fable" }.map { ($0.usage, $0.reportedResetsAt) }
         }) { rings.append(ring) }
         return rings
     }
 
-    // One limit's ring. A reading that lacks the limit — no 5-hour window on
-    // verified Ultra, no Fable limit — gets no ring rather than an empty one.
-    // With no reading at all we can't tell, so it gets the dashed ring:
-    // otherwise a bar of only S or F rings would silently drop every login it
-    // can't read. A window that reset since its reading is dashed too, since
-    // what was used after the reset is unknown.
+    // One limit's ring. An account whose reading lacks the limit — no 5-hour
+    // window on verified Ultra, no Fable limit on Codex — gets no ring rather
+    // than an empty one. That is decided from the last reading even once the
+    // login has lapsed (which keeps it), so a lapsed Codex login doesn't grow a
+    // dashed F it never had. With no reading ever we can't tell, so every
+    // selected limit gets the dashed ring: otherwise a bar of only S or F rings
+    // would silently drop every login it can't read.
     private func ring(
         _ label: String,
-        _ usage: WebUsageData?,
+        _ state: AccountUsage?,
         _ now: Date,
         _ window: (WebUsageData) -> (value: Double, reportedResetsAt: Date?)?
     ) -> RingSegment? {
-        guard let usage else { return RingSegment(label: label, progress: nil) }
-        guard let limit = window(usage) else { return nil }
+        guard let reading = state?.usage else { return RingSegment(label: label, progress: nil) }
+        guard let limit = window(reading) else { return nil }
+        guard state?.needsLogin != true else { return RingSegment(label: label, progress: nil) }
         return RingSegment(
             label: label,
-            progress: usage.usage(limit.value, reportedResetsAt: limit.reportedResetsAt, at: now)
+            progress: reading.usage(limit.value, reportedResetsAt: limit.reportedResetsAt, at: now)
         )
     }
 

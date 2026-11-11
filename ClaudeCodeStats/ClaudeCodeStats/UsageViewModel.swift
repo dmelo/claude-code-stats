@@ -40,11 +40,13 @@ enum UsageAccount: Identifiable, Hashable {
         }
     }
 
-    /// The Claude logins first, in aimux config order, then Codex when this
-    /// machine has run it.
-    static func discover() -> [UsageAccount] {
-        AimuxService.discoverAccounts().map(UsageAccount.claude)
-            + (CodexUsageService.isInstalled ? [.codex] : [])
+    /// The Claude logins first, in aimux config order, then Codex when it is
+    /// logged in with ChatGPT. Once shown, Codex stays while its login file
+    /// exists: Codex rewrites the file when it refreshes, and one read landing
+    /// mid-write would otherwise drop the account and its reading.
+    static func discover(keepingCodex: Bool = false) -> [UsageAccount] {
+        let codex = CodexUsageService.hasLogin || (keepingCodex && CodexUsageService.hasAuthFile)
+        return AimuxService.discoverAccounts().map(UsageAccount.claude) + (codex ? [.codex] : [])
     }
 }
 
@@ -148,7 +150,7 @@ class UsageViewModel: ObservableObject {
         defer { isLoading = false }
 
         // Pick up profiles added to or removed from aimux since the last pass.
-        let discovered = UsageAccount.discover()
+        let discovered = UsageAccount.discover(keepingCodex: accounts.contains(.codex))
         if discovered != accounts {
             accounts = discovered
             usageByAccount = usageByAccount.filter { key, _ in discovered.contains { $0.id == key } }
@@ -185,6 +187,12 @@ class UsageViewModel: ObservableObject {
     private func refreshCodexUsage() async {
         let id = UsageAccount.codex.id
         var entry = usageByAccount[id] ?? AccountUsage()
+        // As for a Claude login: with no reading to fall back on, clear the old
+        // error so the retry shows as loading rather than as a fresh failure.
+        if entry.usage == nil {
+            entry.error = nil
+            usageByAccount[id] = entry
+        }
         do {
             entry = AccountUsage(usage: try await CodexUsageService.shared.fetchUsage())
         } catch {

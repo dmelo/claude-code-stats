@@ -33,27 +33,34 @@ struct UsageCardView: View {
     let title: String
     let usage: Double
     let resetsAt: Date
+    /// The reading this card's window came from, and the reset time it
+    /// reported, so a window that reset since a stale reading shows "—" as the
+    /// per-account card does. Without them the figure is shown as given.
+    var reading: WebUsageData? = nil
+    var reportedResetsAt: Date? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(Theme.textPrimary)
-
-            HStack(spacing: 12) {
-                ProgressBarView(progress: usage)
-
-                Text("\(Int(usage))%")
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+        TimelineView(.everyMinute) { context in
+            let shown = reading.map { $0.usage(usage, reportedResetsAt: reportedResetsAt, at: context.date) } ?? usage
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Theme.textPrimary)
-                    .frame(width: 40, alignment: .trailing)
-            }
 
-            TimelineView(.everyMinute) { context in
-                Text(ResetCountdown.text(until: resetsAt, now: context.date))
+                HStack(spacing: 12) {
+                    ProgressBarView(progress: shown ?? 0)
+
+                    Text(shown.map { "\(Int($0))%" } ?? "—")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Theme.textPrimary)
+                        .frame(width: 40, alignment: .trailing)
+                }
+
+                Text(shown == nil ? "Reset since this reading" : ResetCountdown.text(until: resetsAt, now: context.date))
                     .font(.system(size: 11))
                     .foregroundColor(Theme.textSecondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
         .background(Theme.cardBackground)

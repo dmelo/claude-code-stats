@@ -29,12 +29,30 @@ struct WebUsageData {
     var reportedSessionResetsAt: Date? = nil
     var reportedWeeklyResetsAt: Date? = nil
 
-    /// Whether a window has reset since this reading was taken. A reading is a
-    /// snapshot, kept on screen when refreshing fails, and once a window's
-    /// reported reset falls between the reading and `now` its figure no longer
-    /// holds.
+    /// A reading older than this is stale: readings are refreshed every few
+    /// minutes, so one only gets this old while refreshing fails.
+    static let staleAfter: TimeInterval = 15 * 60
+
+    func isStale(at now: Date) -> Bool {
+        now.timeIntervalSince(lastUpdated) >= Self.staleAfter
+    }
+
+    /// "As of 3h ago" for a stale reading, else nil.
+    func ageText(at now: Date) -> String? {
+        guard isStale(at: now) else { return nil }
+        let minutes = Int(now.timeIntervalSince(lastUpdated) / 60)
+        if minutes < 60 { return "As of \(minutes)m ago" }
+        let hours = minutes / 60
+        if hours < 48 { return "As of \(hours)h ago" }
+        return "As of \(hours / 24)d ago"
+    }
+
+    /// Whether a stale reading's window has reset since the reading was taken,
+    /// so its figure no longer holds. Only once stale: a healthy account polls
+    /// within minutes of any reset, and calling the window unknown for that gap
+    /// would blink every ring dashed every five hours with nothing wrong.
     func hasReset(_ reportedResetsAt: Date?, at now: Date) -> Bool {
-        guard let reportedResetsAt else { return false }
+        guard let reportedResetsAt, isStale(at: now) else { return false }
         return reportedResetsAt > lastUpdated && reportedResetsAt <= now
     }
 

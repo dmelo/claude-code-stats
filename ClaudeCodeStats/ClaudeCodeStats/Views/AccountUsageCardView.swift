@@ -7,10 +7,6 @@ struct AccountUsageCardView: View {
     let name: String
     let state: AccountUsage?
 
-    /// A reading older than this says how old it is. Readings are refreshed
-    /// every few minutes, so one only gets this old while refreshing fails.
-    private static let staleAfter: TimeInterval = 15 * 60
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(name)
@@ -49,7 +45,7 @@ struct AccountUsageCardView: View {
                              reportedResetsAt: limit.reportedResetsAt, in: usage, now: context.date)
                 }
 
-                if let age = Self.ageText(of: usage.lastUpdated, now: context.date) {
+                if let age = usage.ageText(at: context.date) {
                     Text(age)
                         .font(.system(size: 10))
                         .foregroundColor(Theme.textSecondary)
@@ -85,17 +81,6 @@ struct AccountUsageCardView: View {
                 .foregroundColor(Theme.textSecondary)
                 .padding(.leading, 60)
         }
-    }
-
-    /// "As of 3h ago" for a reading old enough to need saying, else nil.
-    static func ageText(of reading: Date, now: Date) -> String? {
-        let age = now.timeIntervalSince(reading)
-        guard age >= staleAfter else { return nil }
-        let minutes = Int(age / 60)
-        if minutes < 60 { return "As of \(minutes)m ago" }
-        let hours = minutes / 60
-        if hours < 48 { return "As of \(hours)h ago" }
-        return "As of \(hours / 24)d ago"
     }
 
     private func errorRow(_ message: String) -> some View {
