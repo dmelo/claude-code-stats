@@ -3,11 +3,13 @@ import SwiftUI
 
 /// Daily API-equivalent spend over a rolling window.
 ///
-/// One series, so the caption identifies it and no legend is needed. Bars carry
-/// no value labels — hovering reveals the exact figure, and the totals above the
-/// chart are the standing readout.
+/// Claude alone is one series, so the caption identifies it and no legend is
+/// needed. With Codex, each bar stacks Codex on Claude and the caption grows a
+/// legend. Bars carry no value labels — hovering reveals the exact figures, and
+/// the totals above the chart are the standing readout.
 struct SpendChartView: View {
     let daily: [DailySpend]
+    var showsCodex = false
 
     @State private var hovered: DailySpend?
 
@@ -59,25 +61,58 @@ struct SpendChartView: View {
                 Text(hovered.cost.usd)
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundColor(Theme.textPrimary)
+
+                Spacer(minLength: 0)
+
+                if showsCodex && hovered.codex > 0 {
+                    legendItem(.codex, hovered.codex.usd)
+                }
             } else {
                 Text("Daily · last \(daily.count) days")
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textSecondary)
-            }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+
+                if showsCodex {
+                    legendItem(.claude, "Claude")
+                    legendItem(.codex, "Codex")
+                }
+            }
         }
         .frame(height: 12)
     }
 
+    private func legendItem(_ provider: SpendProvider, _ text: String) -> some View {
+        HStack(spacing: 3) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Theme.chartColor(for: provider))
+                .frame(width: 6, height: 6)
+            Text(text)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(Theme.textSecondary)
+        }
+    }
+
     private var chart: some View {
+        // Bars sharing a date stack, Claude first so it keeps the baseline it
+        // had before Codex was counted.
         Chart(daily) { day in
             BarMark(
                 x: .value("Date", day.date, unit: .day),
-                y: .value("Spend", day.cost)
+                y: .value("Spend", day.claude)
             )
             .foregroundStyle(Theme.chartBar.opacity(dimmed(day) ? 0.3 : 1))
             .cornerRadius(1)
+
+            if showsCodex {
+                BarMark(
+                    x: .value("Date", day.date, unit: .day),
+                    y: .value("Spend", day.codex)
+                )
+                .foregroundStyle(Theme.chartBarCodex.opacity(dimmed(day) ? 0.3 : 1))
+                .cornerRadius(1)
+            }
         }
         .chartYScale(domain: yDomain)
         .chartYAxis { yAxis }
@@ -158,9 +193,9 @@ struct SpendChartView: View {
         let date = calendar.date(byAdding: .day, value: offset - 29, to: today)!
         // A couple of idle days, to show the gaps render.
         let cost = [6, 13].contains(offset) ? 0 : Double.random(in: 40...260)
-        return DailySpend(date: date, cost: cost)
+        return DailySpend(date: date, claude: cost, codex: offset % 3 == 0 ? 30 : 0)
     }
-    return SpendChartView(daily: sample)
+    return SpendChartView(daily: sample, showsCodex: true)
         .padding()
         .frame(width: 256)
         .background(Theme.cardBackground)

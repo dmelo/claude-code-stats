@@ -258,7 +258,10 @@ class UsageViewModel: ObservableObject {
     // endpoint's rate limit and is safe to recompute on every refresh. The scan
     // is incremental after the first one.
     func refreshSpend() async {
-        spend = await CostService.shared.fetchSpend()
+        // Concurrently: separate actors over separate files.
+        async let claude = CostService.shared.fetchLedger()
+        async let codex = CodexCostService.shared.fetchLedger()
+        spend = SpendData.summarize(claude: await claude, codex: await codex)
     }
 
     // RTK savings come from RTK's own local SQLite log, independent of the usage

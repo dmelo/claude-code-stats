@@ -176,11 +176,8 @@ private func price(for model: String) -> ModelPrice? {
 
 /// Day rollups older than this are dropped from the cache. Must exceed the
 /// longest window we report (the last-30-days total and the chart, both
-/// `chartWindowDays`) with room to spare.
+/// `SpendData.windowDays`) with room to spare.
 private let retentionDays = 100
-
-/// Days of history the chart plots, counting back from today.
-private let chartWindowDays = 30
 
 /// Bump to discard cached rollups and re-scan every transcript from scratch.
 ///
@@ -305,7 +302,9 @@ actor CostService {
         }
     }
 
-    func fetchSpend() -> SpendData {
+    /// Claude Code's spend by day and model, after scanning whatever the
+    /// transcripts gained since the last call.
+    func fetchLedger() -> SpendLedger {
         let paths = transcriptPaths()
         for path in paths {
             scan(path: path)
@@ -317,7 +316,7 @@ actor CostService {
         if isDirty {
             isDirty = !persist()
         }
-        return summarize()
+        return ledger()
     }
 
     // MARK: - Scanning
@@ -438,7 +437,7 @@ actor CostService {
         let requestID = object["requestId"] as? String ?? ""
         let key = entryHash("\(id):\(requestID)")
 
-        let day = entryDay[key] ?? Self.dayKey(for: date)
+        let day = entryDay[key] ?? SpendDay.key(for: date)
         var rollup = cache.days[day] ?? DayRollup()
         let cost = cost(usage: usage, price: modelPrice, on: date)
         // Ratio inputs, counted once per entry — only the first time it's ever
@@ -528,70 +527,12 @@ actor CostService {
 
     // MARK: - Aggregation
 
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        // Pinned, per Apple's guidance for fixed-format dates: left alone, the
-        // formatter inherits the user's calendar, and "yyyy" under a Buddhist or
-        // Japanese one renders 2026 as 2569 or 0008 — day keys would stop
-        // matching the ones Calendar.current is compared against. The time zone
-        // stays on the system's, since a day here means the user's local day.
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
-    private static func dayKey(for date: Date) -> String {
-        dayFormatter.string(from: date)
-    }
-
-    private func summarize() -> SpendData {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let weekStart = calendar.date(byAdding: .day, value: -6, to: today) ?? today
-        // Rolling 30-day window, sharing the chart's span so the "Last 30 days"
-        // total is exactly the sum of the bars plotted below it.
-        let last30Start = calendar.date(byAdding: .day, value: -(chartWindowDays - 1), to: today) ?? today
-
-        var todayTotal = 0.0
-        var weekTotal = 0.0
-        var last30Total = 0.0
-        var last30ByModel: [String: Double] = [:]
-        var totalByDay: [String: Double] = [:]
-
-        for (day, rollup) in cache.days {
-            guard let date = Self.dayFormatter.date(from: day) else { continue }
-
-            for entry in rollup.entries.values {
-                totalByDay[day, default: 0] += entry.cost
-                if date >= today { todayTotal += entry.cost }
-                if date >= weekStart { weekTotal += entry.cost }
-                if date >= last30Start {
-                    last30Total += entry.cost
-                    last30ByModel[entry.model, default: 0] += entry.cost
-                }
-            }
+    /// The cached rollups as cost by day and model. Windowing and totals are
+    /// `SpendData.summarize`'s, shared with Codex.
+    private func ledger() -> SpendLedger {
+        cache.days.mapValues { rollup in
+            rollup.entries.values.reduce(into: [String: Double]()) { $0[$1.model, default: 0] += $1.cost }
         }
-
-        // Walk the window day by day rather than reading back the keys present
-        // in the cache, so a day with no activity yields a zero-height bar
-        // instead of being dropped and letting its neighbours close the gap.
-        var daily: [DailySpend] = []
-        for offset in stride(from: -(chartWindowDays - 1), through: 0, by: 1) {
-            guard let date = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
-            daily.append(DailySpend(date: date, cost: totalByDay[Self.dayKey(for: date)] ?? 0))
-        }
-
-        return SpendData(
-            today: todayTotal,
-            week: weekTotal,
-            last30: last30Total,
-            last30ByModel: last30ByModel
-                .map { ModelSpend(model: $0.key, cost: $0.value) }
-                .sorted { $0.cost > $1.cost },
-            daily: daily,
-            lastUpdated: Date()
-        )
     }
 
     // MARK: - Persistence
@@ -602,7 +543,7 @@ actor CostService {
         else { return }
 
         for (day, rollup) in cache.days {
-            guard let date = Self.dayFormatter.date(from: day), date < cutoff else { continue }
+            guard let date = SpendDay.date(from: day), date < cutoff else { continue }
             for key in rollup.entries.keys { entryDay[key] = nil }
             cache.days[day] = nil
             isDirty = true

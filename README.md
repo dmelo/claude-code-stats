@@ -12,7 +12,7 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 - **Menu bar rings** - Optional session (S), weekly (W) and Fable (F) rings drawn right in the menu bar, coloured by how close each limit is. A profile whose plan lacks a limit gets no ring for it
 - **Multiple accounts (aimux)** - If you switch between Claude subscriptions with [aimux](https://github.com/Digital-Threads/aimux), every Claude profile gets its own limits in the popover and its own named rings in the menu bar — see [Multiple accounts](#multiple-accounts-aimux)
 - **Codex limits** - If you also use OpenAI's Codex CLI signed in with ChatGPT, its 5-hour and weekly limits get a card and rings of their own — see [Codex](#codex)
-- **API-equivalent spend** - What your token usage would have cost at API rates: today, the last 7 days, and the last 30 days, with a per-model breakdown and a 30-day chart you can hover for any day's figure. Read from Claude Code's own transcripts on disk, so it needs no extra tooling and makes no network calls
+- **API-equivalent spend** - What your token usage would have cost at API rates: today, the last 7 days, and the last 30 days, with a per-model breakdown and a 30-day chart you can hover for any day's figure. Read from Claude Code's own transcripts on disk, so it needs no extra tooling and makes no network calls. If you also use OpenAI's Codex CLI, its spend is added from Codex's session logs: the totals stay one number with a Claude/Codex split beneath, and Codex gets its own colour in the chart and the model list. Another machine's Codex sessions mirrored into `~/.config/codex/sessions/<machine>/` are counted too (Codex itself never reads that folder)
 - **RTK savings** - If you run your dev commands through RTK (Rust Token Killer), shows how many tool-output tokens it kept out of Claude Code's context: today, the last 7 days, and the last 30 days, plus a lifetime total, an average-reduction meter, and an API-equivalent value range. The range spans a conservative floor (each saved token priced once) and an optimistic ceiling (adding the re-billing an unfiltered result would incur, scaled by your own observed cache re-read rate). Read from RTK's local history database, so it appears only when RTK is installed and makes no network calls
 - **Auto-refresh** - Updates every 5 minutes automatically
 - **Claude service status** - Live status from [status.claude.com](https://status.claude.com) shown in the footer (Operational, Degraded, Outage, Critical)
@@ -82,7 +82,7 @@ If the [Codex CLI](https://github.com/openai/codex) is signed in with ChatGPT on
 
 - **Where the numbers come from:** the same ChatGPT usage endpoint the Codex CLI uses, polled with your Claude limits, using the login Codex keeps in `~/.codex/auth.json` (or `$CODEX_HOME/auth.json` — but a shell export doesn't reach an app opened from Finder or at login; use `launchctl setenv CODEX_HOME …`). They match chatgpt.com's Usage page, including use from other machines and from the other ChatGPT surfaces that share the limits.
 - **The login is only read.** The app never refreshes it; Codex does that whenever it runs. A Codex login lasts about ten days, so if you haven't run Codex on this Mac for that long the card asks you to run `codex` once.
-- **What isn't shown:** Codex spend. The spend card counts Claude only.
+- **Spend:** Codex's API-equivalent spend is added to the spend card from Codex's session logs, in its own colour (see [Features](#features)).
 
 For every account, Claude or Codex, a card whose last reading is more than 15 minutes old (refreshing has been failing) says so ("As of 3h ago"), and a window whose reset has passed since that reading shows "—" and "Reset since this reading" rather than a stale figure.
 
@@ -136,6 +136,7 @@ ClaudeCodeStats/
     │   ├── CodexUsageService.swift  # Codex limits via its ChatGPT login
     │   ├── OAuthUsageService.swift  # Anthropic API usage via OAuth, per account
     │   ├── CostService.swift        # API-equivalent spend from transcripts
+    │   ├── CodexCostService.swift   # Codex spend from its session logs
     │   ├── RTKSavingsService.swift  # RTK token savings from its local history
     │   ├── UsageHistoryService.swift# Usage history persistence
     │   ├── StatusService.swift      # Claude service health status
@@ -154,7 +155,7 @@ ClaudeCodeStats/
 
 - The app reads OAuth credentials from `~/.claude/.credentials.json` or the macOS Keychain — for aimux, each profile's own Keychain item and `~/.aimux/config.yaml`. Tokens are held in memory only; the app never refreshes or writes back Claude Code's credentials. (Versions up to 0.13.0 cached a copy in a `ClaudeCodeStats-credentials` Keychain item; it is no longer read or written, and you can delete it in Keychain Access.)
 - The app communicates with the Anthropic API to fetch usage data, status.claude.com for service health, and the GitHub API for version checks
-- API-equivalent spend and RTK savings are computed entirely on your machine from Claude Code's transcripts and RTK's local history database — no network calls, and nothing about your usage leaves your device
+- API-equivalent spend and RTK savings are computed entirely on your machine from Claude Code's transcripts, Codex's session logs and RTK's local history database — no network calls, and nothing about your usage leaves your device
 - No data is sent to any third parties
 
 ## License

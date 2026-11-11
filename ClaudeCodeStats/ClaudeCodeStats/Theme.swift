@@ -93,6 +93,20 @@ enum Theme {
             : NSColor(red: 37/255, green: 99/255, blue: 235/255, alpha: 1)
     }))
 
+    // Codex's share of spend, stacked on chartBar (Claude's). Magenta rather
+    // than the next obvious hue, orange, because orange already means "over
+    // half used" on the usage bars. The pair passes the dataviz palette checks
+    // in both modes against cardBackground: colour-blind separation ΔE ≥ 17.8,
+    // normal vision ΔE ≥ 27.7, contrast ≥ 3:1. One step works for both.
+    static let chartBarCodex = Color(nsColor: NSColor(red: 213/255, green: 81/255, blue: 129/255, alpha: 1))
+
+    static func chartColor(for provider: SpendProvider) -> Color {
+        switch provider {
+        case .claude: return chartBar
+        case .codex: return chartBarCodex
+        }
+    }
+
     static let inputBackground = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor(red: 35/255, green: 35/255, blue: 35/255, alpha: 1)
