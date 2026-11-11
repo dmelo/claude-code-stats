@@ -91,16 +91,24 @@ struct ClaudeCodeStatsApp: App {
         }
     }
 
-    private func rings(for account: ClaudeAccount) -> [RingSegment] {
+    // Each figure goes through `usage(_:reportedResetsAt:at:)`, so a window that
+    // reset since its reading draws empty, as the popover shows it.
+    private func rings(for account: UsageAccount) -> [RingSegment] {
         let state = viewModel.usageByAccount[account.id]
         let usage = state?.needsLogin == true ? nil : state?.usage
+        let now = Date()
         var rings: [RingSegment] = []
-        if showSession, let ring = optionalRing("S", usage, { $0.sessionUsage }) { rings.append(ring) }
-        if showWeekly { rings.append(RingSegment(label: "W", progress: usage?.weeklyUsage)) }
-        if showFable,
-           let ring = optionalRing("F", usage, { $0.scopedLimits.first { $0.name == "Fable" }?.usage }) {
-            rings.append(ring)
+        if showSession, let ring = optionalRing("S", usage, { reading in
+            reading.sessionUsage.map { reading.usage($0, reportedResetsAt: reading.reportedSessionResetsAt, at: now) }
+        }) { rings.append(ring) }
+        if showWeekly {
+            let weekly = usage.map { $0.usage($0.weeklyUsage, reportedResetsAt: $0.reportedWeeklyResetsAt, at: now) }
+            rings.append(RingSegment(label: "W", progress: weekly))
         }
+        if showFable, let ring = optionalRing("F", usage, { reading in
+            reading.scopedLimits.first { $0.name == "Fable" }
+                .map { reading.usage($0.usage, reportedResetsAt: $0.reportedResetsAt, at: now) }
+        }) { rings.append(ring) }
         return rings
     }
 

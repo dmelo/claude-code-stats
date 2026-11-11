@@ -10,7 +10,9 @@ struct SettingsView: View {
     @AppStorage(ProfilePreferences.hiddenKey) private var hiddenProfilesRaw = ""
     @AppStorage(ProfilePreferences.labelsKey) private var profileLabelsRaw = ""
     // The view model's list, so Settings and the menu bar never disagree.
-    private var accounts: [ClaudeAccount] { viewModel.accounts }
+    private var accounts: [UsageAccount] { viewModel.accounts }
+    // Only these have a login to report on; Codex reads local files.
+    private var claudeAccounts: [ClaudeAccount] { viewModel.claudeAccounts }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,14 +68,14 @@ struct SettingsView: View {
 
             // One row per polled login. With aimux, ~/.claude may not be one of
             // them, so the default login alone would describe the wrong thing.
-            ForEach(accounts) { account in
+            ForEach(claudeAccounts) { account in
                 authRow(account)
             }
 
             if !viewModel.allAccountsHaveCredentials {
-                Text(viewModel.isMultiAccount
+                Text(claudeAccounts.count > 1
                      ? "Run 'aimux run <profile>' for each profile marked not authenticated. Credentials are detected automatically."
-                     : "Run '\(accounts.first?.reauthCommand ?? "claude")' in your terminal to log in. Credentials are detected automatically.")
+                     : "Run '\(claudeAccounts.first?.reauthCommand ?? "claude")' in your terminal to log in. Credentials are detected automatically.")
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -158,12 +160,13 @@ struct SettingsView: View {
         .cornerRadius(8)
     }
 
-    // One row per aimux profile: whether it gets rings in the menu bar, and the
-    // short label drawn before them. An empty label falls back to the profile
-    // name. The popover always lists every profile.
+    // One row per named account (each aimux profile, and Codex): whether it
+    // gets rings in the menu bar, and the short label drawn before them. An
+    // empty label falls back to the profile name. The popover always lists
+    // every account.
     private var profilesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("aimux Profiles")
+            Text("Profiles")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Theme.textPrimary)
 

@@ -153,14 +153,15 @@ struct ContentView: View {
         .padding(12)
     }
 
-    // One card per aimux profile, then the local stats once for all of them:
-    // the profiles share one transcripts dir, and a transcript records no
-    // account, so spend can't honestly be split per profile.
+    // One card per account (each aimux profile, then Codex), then the local
+    // stats once for all of them: the profiles share one transcripts dir, and a
+    // transcript records no account, so spend can't honestly be split per
+    // profile.
     private var multiAccountView: some View {
         VStack(spacing: 8) {
             ForEach(viewModel.accounts) { account in
                 AccountUsageCardView(
-                    name: account.profileName ?? "Default",
+                    name: account.displayName,
                     state: viewModel.usageByAccount[account.id]
                 )
             }

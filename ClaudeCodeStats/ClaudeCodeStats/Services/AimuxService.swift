@@ -174,9 +174,10 @@ enum ProfilePreferences {
     }
 
     /// The label drawn in the menu bar: the user's short label when set,
-    /// otherwise the aimux profile name.
-    static func label(for account: ClaudeAccount, in labels: [String: String]) -> String {
-        guard let name = account.profileName else { return "" }
+    /// otherwise the profile name. The plain no-aimux login has none to store a
+    /// label under, and is named only beside Codex, as "claude".
+    static func label(for account: UsageAccount, in labels: [String: String]) -> String {
+        guard let name = account.profileName else { return "claude" }
         let custom = labels[name]?.trimmingCharacters(in: .whitespaces) ?? ""
         return custom.isEmpty ? name : custom
     }

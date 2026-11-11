@@ -28,6 +28,20 @@ struct WebUsageData {
     /// to log: it reads as a reset on every sample.
     var reportedSessionResetsAt: Date? = nil
     var reportedWeeklyResetsAt: Date? = nil
+
+    /// Whether a window has reset since this reading was taken. A reading is a
+    /// snapshot — Codex's can be days old, Claude's up to a refresh interval —
+    /// and once a window's reported reset falls between the reading and `now`,
+    /// the window has started over and the reading's figure no longer holds.
+    func hasReset(_ reportedResetsAt: Date?, at now: Date) -> Bool {
+        guard let reportedResetsAt else { return false }
+        return reportedResetsAt > lastUpdated && reportedResetsAt <= now
+    }
+
+    /// A window's figure at `now`: the reading's, or 0 once it has reset.
+    func usage(_ value: Double, reportedResetsAt: Date?, at now: Date) -> Double {
+        hasReset(reportedResetsAt, at: now) ? 0 : value
+    }
 }
 
 // What a model's tokens would have cost at API rates over a window.

@@ -7,6 +7,11 @@ struct AccountUsageCardView: View {
     let name: String
     let state: AccountUsage?
 
+    /// A reading older than this says how old it is. Claude's are refreshed
+    /// every few minutes and stay under it unless refreshing fails; Codex's
+    /// are as old as the last Codex turn.
+    private static let staleAfter: TimeInterval = 15 * 60
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(name)
@@ -32,40 +37,65 @@ struct AccountUsageCardView: View {
     }
 
     private func limitRows(_ usage: WebUsageData) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let session = usage.sessionUsage {
-                limitRow(title: "Session", usage: session, resetsAt: usage.sessionResetsAt)
-            }
-            limitRow(title: "Weekly", usage: usage.weeklyUsage, resetsAt: usage.weeklyResetsAt)
-            ForEach(usage.scopedLimits) { limit in
-                limitRow(title: limit.name, usage: limit.usage, resetsAt: limit.resetsAt)
+        TimelineView(.everyMinute) { context in
+            VStack(alignment: .leading, spacing: 8) {
+                if let session = usage.sessionUsage {
+                    limitRow(title: "Session", value: session, resetsAt: usage.sessionResetsAt,
+                             reportedResetsAt: usage.reportedSessionResetsAt, in: usage, now: context.date)
+                }
+                limitRow(title: "Weekly", value: usage.weeklyUsage, resetsAt: usage.weeklyResetsAt,
+                         reportedResetsAt: usage.reportedWeeklyResetsAt, in: usage, now: context.date)
+                ForEach(usage.scopedLimits) { limit in
+                    limitRow(title: limit.name, value: limit.usage, resetsAt: limit.resetsAt,
+                             reportedResetsAt: limit.reportedResetsAt, in: usage, now: context.date)
+                }
+
+                if let age = Self.ageText(of: usage.lastUpdated, now: context.date) {
+                    Text(age)
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.textSecondary)
+                }
             }
         }
     }
 
-    private func limitRow(title: String, usage: Double, resetsAt: Date) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+    private func limitRow(
+        title: String, value: Double, resetsAt: Date, reportedResetsAt: Date?,
+        in usage: WebUsageData, now: Date
+    ) -> some View {
+        let hasReset = usage.hasReset(reportedResetsAt, at: now)
+        let shown = hasReset ? 0 : value
+        return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
                 Text(title)
                     .font(.system(size: 11))
                     .foregroundColor(Theme.textSecondary)
                     .frame(width: 52, alignment: .leading)
 
-                ProgressBarView(progress: usage)
+                ProgressBarView(progress: shown)
 
-                Text("\(Int(usage))%")
+                Text("\(Int(shown))%")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(Theme.textPrimary)
                     .frame(width: 36, alignment: .trailing)
             }
 
-            TimelineView(.everyMinute) { context in
-                Text(ResetCountdown.text(until: resetsAt, now: context.date))
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.textSecondary)
-                    .padding(.leading, 60)
-            }
+            Text(hasReset ? "Reset since this reading" : ResetCountdown.text(until: resetsAt, now: now))
+                .font(.system(size: 10))
+                .foregroundColor(Theme.textSecondary)
+                .padding(.leading, 60)
         }
+    }
+
+    /// "As of 3h ago" for a reading old enough to need saying, else nil.
+    static func ageText(of reading: Date, now: Date) -> String? {
+        let age = now.timeIntervalSince(reading)
+        guard age >= staleAfter else { return nil }
+        let minutes = Int(age / 60)
+        if minutes < 60 { return "As of \(minutes)m ago" }
+        let hours = minutes / 60
+        if hours < 48 { return "As of \(hours)h ago" }
+        return "As of \(hours / 24)d ago"
     }
 
     private func errorRow(_ message: String) -> some View {
