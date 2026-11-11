@@ -54,18 +54,11 @@ struct SpendChartView: View {
     private var caption: some View {
         HStack(spacing: 5) {
             if let hovered {
-                Text(hovered.date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Theme.textPrimary)
-
-                Text(hovered.cost.usd)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Theme.textPrimary)
-
-                Spacer(minLength: 0)
-
-                if showsCodex && hovered.codex > 0 {
-                    legendItem(.codex, hovered.codex.usd)
+                // With Codex's split beside it a big day can outgrow the row, so
+                // the weekday goes before any amount is truncated.
+                ViewThatFits(in: .horizontal) {
+                    hoverReadout(hovered, date: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                    hoverReadout(hovered, date: .dateTime.month(.abbreviated).day())
                 }
             } else {
                 Text("Daily · last \(daily.count) days")
@@ -83,6 +76,28 @@ struct SpendChartView: View {
         .frame(height: 12)
     }
 
+    private func hoverReadout(_ day: DailySpend, date format: Date.FormatStyle) -> some View {
+        HStack(spacing: 5) {
+            Text(day.date, format: format)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize()
+
+            Text(day.cost.usd)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundColor(Theme.textPrimary)
+                .fixedSize()
+
+            Spacer(minLength: 0)
+
+            // Both shares, so the readout adds up to the total beside it.
+            if showsCodex {
+                legendItem(.claude, day.claude.usd)
+                legendItem(.codex, day.codex.usd)
+            }
+        }
+    }
+
     private func legendItem(_ provider: SpendProvider, _ text: String) -> some View {
         HStack(spacing: 3) {
             RoundedRectangle(cornerRadius: 1.5)
@@ -91,6 +106,7 @@ struct SpendChartView: View {
             Text(text)
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(Theme.textSecondary)
+                .fixedSize()
         }
     }
 
