@@ -179,18 +179,29 @@ class UsageViewModel: ObservableObject {
         }
     }
 
-    // Codex limits come from its local session logs, so there is no login to
-    // lapse and nothing to retry. An empty result while a reading is on screen
-    // means the files went away, not that the account has no limits.
+    // Same shape as a Claude login's refresh: keep the last reading through a
+    // transient failure, and hide it once the login has lapsed. Only the
+    // messages differ — Codex refreshes its own login when it runs.
     private func refreshCodexUsage() async {
         let id = UsageAccount.codex.id
-        if let reading = await CodexUsageService.shared.latestReading() {
-            usageByAccount[id] = AccountUsage(usage: reading)
-        } else {
-            var entry = usageByAccount[id] ?? AccountUsage()
-            entry.error = "No Codex limits recorded yet. They appear after your next Codex turn."
-            usageByAccount[id] = entry
+        var entry = usageByAccount[id] ?? AccountUsage()
+        do {
+            entry = AccountUsage(usage: try await CodexUsageService.shared.fetchUsage())
+        } catch {
+            switch error as? UsageError {
+            case .tokenExpired:
+                entry.needsLogin = true
+                entry.error = "Codex login expired. Run 'codex' to refresh it."
+            case .noCredentials:
+                entry.needsLogin = true
+                entry.error = "No Codex login found. Run 'codex login' to sign in with ChatGPT."
+            default:
+                if !entry.needsLogin {
+                    entry.error = error.localizedDescription
+                }
+            }
         }
+        usageByAccount[id] = entry
     }
 
     private func refreshUsage(for account: ClaudeAccount) async {

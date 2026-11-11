@@ -7,9 +7,8 @@ struct AccountUsageCardView: View {
     let name: String
     let state: AccountUsage?
 
-    /// A reading older than this says how old it is. Claude's are refreshed
-    /// every few minutes and stay under it unless refreshing fails; Codex's
-    /// are as old as the last Codex turn.
+    /// A reading older than this says how old it is. Readings are refreshed
+    /// every few minutes, so one only gets this old while refreshing fails.
     private static let staleAfter: TimeInterval = 15 * 60
 
     var body: some View {
@@ -63,8 +62,9 @@ struct AccountUsageCardView: View {
         title: String, value: Double, resetsAt: Date, reportedResetsAt: Date?,
         in usage: WebUsageData, now: Date
     ) -> some View {
-        let hasReset = usage.hasReset(reportedResetsAt, at: now)
-        let shown = hasReset ? 0 : value
+        // nil once the window has reset since the reading: what has been used
+        // since is unknown, so no bar and no figure rather than a guessed 0%.
+        let shown = usage.usage(value, reportedResetsAt: reportedResetsAt, at: now)
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
                 Text(title)
@@ -72,15 +72,15 @@ struct AccountUsageCardView: View {
                     .foregroundColor(Theme.textSecondary)
                     .frame(width: 52, alignment: .leading)
 
-                ProgressBarView(progress: shown)
+                ProgressBarView(progress: shown ?? 0)
 
-                Text("\(Int(shown))%")
+                Text(shown.map { "\(Int($0))%" } ?? "—")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(Theme.textPrimary)
                     .frame(width: 36, alignment: .trailing)
             }
 
-            Text(hasReset ? "Reset since this reading" : ResetCountdown.text(until: resetsAt, now: now))
+            Text(shown == nil ? "Reset since this reading" : ResetCountdown.text(until: resetsAt, now: now))
                 .font(.system(size: 10))
                 .foregroundColor(Theme.textSecondary)
                 .padding(.leading, 60)

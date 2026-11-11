@@ -11,7 +11,7 @@ A native macOS menu bar app that displays your Claude Code usage limits in real-
 - **Weekly Limits** - All models combined usage with reset time, plus any per-model weekly limit your plan has (e.g. Fable)
 - **Menu bar rings** - Optional session (S), weekly (W) and Fable (F) rings drawn right in the menu bar, coloured by how close each limit is. A profile whose plan lacks a limit gets no ring for it
 - **Multiple accounts (aimux)** - If you switch between Claude subscriptions with [aimux](https://github.com/Digital-Threads/aimux), every Claude profile gets its own limits in the popover and its own named rings in the menu bar — see [Multiple accounts](#multiple-accounts-aimux)
-- **Codex limits** - If you also use OpenAI's Codex CLI, its 5-hour and weekly limits get a card and rings of their own, read from Codex's local session logs — see [Codex](#codex)
+- **Codex limits** - If you also use OpenAI's Codex CLI signed in with ChatGPT, its 5-hour and weekly limits get a card and rings of their own — see [Codex](#codex)
 - **API-equivalent spend** - What your token usage would have cost at API rates: today, the last 7 days, and the last 30 days, with a per-model breakdown and a 30-day chart you can hover for any day's figure. Read from Claude Code's own transcripts on disk, so it needs no extra tooling and makes no network calls
 - **RTK savings** - If you run your dev commands through RTK (Rust Token Killer), shows how many tool-output tokens it kept out of Claude Code's context: today, the last 7 days, and the last 30 days, plus a lifetime total, an average-reduction meter, and an API-equivalent value range. The range spans a conservative floor (each saved token priced once) and an optimistic ceiling (adding the re-billing an unfiltered result would incur, scaled by your own observed cache re-read rate). Read from RTK's local history database, so it appears only when RTK is installed and makes no network calls
 - **Auto-refresh** - Updates every 5 minutes automatically
@@ -78,11 +78,13 @@ To show rings in the menu bar instead of the chart icon, open Settings (the gear
 
 ## Codex
 
-If the [Codex CLI](https://github.com/openai/codex) has run on your Mac, a **Codex** card appears after your Claude accounts, and Codex gets its own `codex` rings in the menu bar (hide them or relabel them under Settings → Profiles). Nothing to configure:
+If the [Codex CLI](https://github.com/openai/codex) is signed in with ChatGPT on your Mac, a **Codex** card appears after your Claude accounts, and Codex gets its own `codex` rings in the menu bar (hide them or relabel them under Settings → Profiles). Nothing to configure:
 
-- **Where the numbers come from:** every Codex turn writes the account's rate limits into its session log (`~/.codex/sessions`, or `$CODEX_HOME/sessions`). The app reads the newest one. There is no Codex API call and no login to read.
-- **How fresh they are:** only as fresh as your last Codex turn on this Mac. A card whose reading is more than 15 minutes old says so ("As of 3h ago"), and a window whose reset time has passed since the reading shows 0% and "Reset since this reading" rather than the old figure.
+- **Where the numbers come from:** the same ChatGPT usage endpoint the Codex CLI uses, polled with your Claude limits, using the login Codex keeps in `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`). They match chatgpt.com's Usage page, including use from other machines and from the other ChatGPT surfaces that share the limits.
+- **The login is only read.** The app never refreshes it; Codex does that whenever it runs. A Codex login lasts about ten days, so if you haven't run Codex on this Mac for that long the card asks you to run `codex` once.
 - **What isn't shown:** Codex spend. The spend card counts Claude only.
+
+For every account, Claude or Codex, a card whose last reading is more than 15 minutes old (refreshing has been failing) says so ("As of 3h ago"), and a window whose reset has passed since that reading shows "—" and "Reset since this reading" rather than a stale figure.
 
 ## Usage
 
@@ -131,7 +133,7 @@ ClaudeCodeStats/
     ├── UpdateChecker.swift          # Update-check state
     ├── Services/
     │   ├── AimuxService.swift       # aimux profile discovery & menu bar prefs
-    │   ├── CodexUsageService.swift  # Codex limits from its local session logs
+    │   ├── CodexUsageService.swift  # Codex limits via its ChatGPT login
     │   ├── OAuthUsageService.swift  # Anthropic API usage via OAuth, per account
     │   ├── CostService.swift        # API-equivalent spend from transcripts
     │   ├── RTKSavingsService.swift  # RTK token savings from its local history

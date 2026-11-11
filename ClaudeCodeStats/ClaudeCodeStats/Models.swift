@@ -30,17 +30,20 @@ struct WebUsageData {
     var reportedWeeklyResetsAt: Date? = nil
 
     /// Whether a window has reset since this reading was taken. A reading is a
-    /// snapshot — Codex's can be days old, Claude's up to a refresh interval —
-    /// and once a window's reported reset falls between the reading and `now`,
-    /// the window has started over and the reading's figure no longer holds.
+    /// snapshot, kept on screen when refreshing fails, and once a window's
+    /// reported reset falls between the reading and `now` its figure no longer
+    /// holds.
     func hasReset(_ reportedResetsAt: Date?, at now: Date) -> Bool {
         guard let reportedResetsAt else { return false }
         return reportedResetsAt > lastUpdated && reportedResetsAt <= now
     }
 
-    /// A window's figure at `now`: the reading's, or 0 once it has reset.
-    func usage(_ value: Double, reportedResetsAt: Date?, at now: Date) -> Double {
-        hasReset(reportedResetsAt, at: now) ? 0 : value
+    /// A window's figure at `now`, or nil once it has reset since the reading.
+    /// Not 0: the limits are shared across machines (and, for Codex, across the
+    /// ChatGPT account's other surfaces), so usage since the reset can be
+    /// anything until the next reading says.
+    func usage(_ value: Double, reportedResetsAt: Date?, at now: Date) -> Double? {
+        hasReset(reportedResetsAt, at: now) ? nil : value
     }
 }
 

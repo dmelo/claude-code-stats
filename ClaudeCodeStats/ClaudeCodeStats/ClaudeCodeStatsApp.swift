@@ -91,39 +91,41 @@ struct ClaudeCodeStatsApp: App {
         }
     }
 
-    // Each figure goes through `usage(_:reportedResetsAt:at:)`, so a window that
-    // reset since its reading draws empty, as the popover shows it.
     private func rings(for account: UsageAccount) -> [RingSegment] {
         let state = viewModel.usageByAccount[account.id]
         let usage = state?.needsLogin == true ? nil : state?.usage
         let now = Date()
         var rings: [RingSegment] = []
-        if showSession, let ring = optionalRing("S", usage, { reading in
-            reading.sessionUsage.map { reading.usage($0, reportedResetsAt: reading.reportedSessionResetsAt, at: now) }
+        if showSession, let ring = ring("S", usage, now, { reading in
+            reading.sessionUsage.map { ($0, reading.reportedSessionResetsAt) }
         }) { rings.append(ring) }
-        if showWeekly {
-            let weekly = usage.map { $0.usage($0.weeklyUsage, reportedResetsAt: $0.reportedWeeklyResetsAt, at: now) }
-            rings.append(RingSegment(label: "W", progress: weekly))
-        }
-        if showFable, let ring = optionalRing("F", usage, { reading in
-            reading.scopedLimits.first { $0.name == "Fable" }
-                .map { reading.usage($0.usage, reportedResetsAt: $0.reportedResetsAt, at: now) }
+        if showWeekly, let ring = ring("W", usage, now, { reading in
+            (reading.weeklyUsage, reading.reportedWeeklyResetsAt)
+        }) { rings.append(ring) }
+        if showFable, let ring = ring("F", usage, now, { reading in
+            reading.scopedLimits.first { $0.name == "Fable" }.map { ($0.usage, $0.reportedResetsAt) }
         }) { rings.append(ring) }
         return rings
     }
 
-    // A ring for a limit not every plan has: the 5-hour window (absent on
-    // verified Ultra) and Fable. An account whose reading lacks the limit gets
-    // no ring rather than an empty one. With no reading at all we can't tell,
-    // so it gets the dashed ring like W — otherwise a bar of only these rings
-    // would silently drop every login it can't read.
-    private func optionalRing(
+    // One limit's ring. A reading that lacks the limit — no 5-hour window on
+    // verified Ultra, no Fable limit — gets no ring rather than an empty one.
+    // With no reading at all we can't tell, so it gets the dashed ring:
+    // otherwise a bar of only S or F rings would silently drop every login it
+    // can't read. A window that reset since its reading is dashed too, since
+    // what was used after the reset is unknown.
+    private func ring(
         _ label: String,
         _ usage: WebUsageData?,
-        _ value: (WebUsageData) -> Double?
+        _ now: Date,
+        _ window: (WebUsageData) -> (value: Double, reportedResetsAt: Date?)?
     ) -> RingSegment? {
         guard let usage else { return RingSegment(label: label, progress: nil) }
-        return value(usage).map { RingSegment(label: label, progress: $0) }
+        guard let limit = window(usage) else { return nil }
+        return RingSegment(
+            label: label,
+            progress: usage.usage(limit.value, reportedResetsAt: limit.reportedResetsAt, at: now)
+        )
     }
 
     private func renderRings(_ groups: [RingGroup]) -> NSImage {

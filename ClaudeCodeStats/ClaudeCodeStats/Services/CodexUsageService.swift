@@ -1,181 +1,160 @@
 import Foundation
 
-// Codex's limits, read from the session logs Codex writes rather than from an
-// API. Every turn appends a `token_count` event carrying the account's rate
-// limits as of that turn, so a reading is only as fresh as the last Codex turn
-// on this machine: its `lastUpdated` is that turn's time, not when it was read.
+// Codex's 5-hour and weekly limits, fetched live from the usage endpoint in the
+// Codex CLI's own backend client, with the ChatGPT login Codex keeps in
+// `$CODEX_HOME/auth.json` (~/.codex by default). The limits belong to the
+// ChatGPT account and are shared with its other surfaces (Work, Workspace
+// Agents, ChatGPT for Excel), so no local record of Codex turns can stand in for
+// this: usage from another machine or another surface never reaches it.
 //
-// The event, trimmed to what is read here:
+// The login is only ever read. Codex refreshes its own token when it runs, and
+// a refresh here would rotate the token out from under it — the same rule as
+// the Claude logins. An access token lasts about ten days, so a machine that
+// hasn't run Codex in that long shows "run codex" instead of limits.
 //
-//   {"timestamp":"2026-10-23T11:45:55.123Z","type":"event_msg","payload":{
-//     "type":"token_count","rate_limits":{"limit_id":"codex",
-//       "primary":{"used_percent":0.0,"window_minutes":300,"resets_at":1792773964},
-//       "secondary":{"used_percent":1.0,"window_minutes":10080,"resets_at":1793295423}}}}
+// The response, trimmed to what is read here:
+//
+//   {"plan_type":"plus","rate_limit":{
+//     "primary_window":{"used_percent":17,"limit_window_seconds":18000,"reset_at":1794437332},
+//     "secondary_window":{"used_percent":6,"limit_window_seconds":604800,"reset_at":1794997808}}}
 actor CodexUsageService {
     static let shared = CodexUsageService()
 
-    /// Where Codex writes its sessions: `$CODEX_HOME/sessions`, ~/.codex by default.
-    nonisolated static var sessionsDir: URL {
+    // Codex picks "/wham/usage" for a base URL under /backend-api, which is
+    // where its ChatGPT login points ("/api/codex/usage" is for other bases).
+    private let usageURL = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
+    private let session: URLSession
+
+    private init() {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 20
+        session = URLSession(configuration: config)
+    }
+
+    nonisolated static var authPath: String {
         let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"].flatMap { $0.isEmpty ? nil : $0 }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex").path
-        return URL(fileURLWithPath: codexHome).appendingPathComponent("sessions")
+        return codexHome + "/auth.json"
     }
 
-    /// Codex appears only on a machine that has run it.
+    /// Codex appears only where it has been logged in to with ChatGPT. An API
+    /// key login has no plan limits to show.
     nonisolated static var isInstalled: Bool {
-        FileManager.default.fileExists(atPath: sessionsDir.path)
+        readLogin() != nil
     }
 
-    private struct SessionFile {
-        let path: String
-        let modified: Date
+    private struct Login {
+        let accessToken: String
+        let accountID: String
+        let expiresAt: Date?
     }
 
-    // The last reading in each file, keyed by path, with the modification date
-    // it was read at: an unchanged file isn't read again. A nil reading records
-    // that the file holds none.
-    private var readings: [String: (modified: Date, reading: WebUsageData?)] = [:]
-
-    private init() {}
-
-    /// The newest reading in any session file, or nil when none holds one.
-    func latestReading() -> WebUsageData? {
-        let files = sessionFiles()
-        readings = readings.filter { path, _ in files.contains { $0.path == path } }
-        // Newest file first: the last file written holds the last turn. A
-        // session on a local model carries no limits, so older files are the
-        // fallback rather than an empty result.
-        for file in files.sorted(by: { $0.modified > $1.modified }) {
-            if let reading = reading(in: file) { return reading }
+    private struct AuthFile: Decodable {
+        let tokens: Tokens?
+        struct Tokens: Decodable {
+            let accessToken: String?
+            let accountId: String?
         }
-        return nil
     }
 
-    private func sessionFiles() -> [SessionFile] {
-        let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
-        guard let walker = FileManager.default.enumerator(
-            at: Self.sessionsDir, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]
-        ) else { return [] }
-        var files: [SessionFile] = []
-        for case let url as URL in walker where url.pathExtension == "jsonl" {
-            guard let values = try? url.resourceValues(forKeys: Set(keys)),
-                  values.isRegularFile == true,
-                  let modified = values.contentModificationDate else { continue }
-            files.append(SessionFile(path: url.path, modified: modified))
-        }
-        return files
+    private nonisolated static func readLogin() -> Login? {
+        guard let data = FileManager.default.contents(atPath: authPath) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let tokens = (try? decoder.decode(AuthFile.self, from: data))?.tokens,
+              let token = tokens.accessToken, !token.isEmpty,
+              let account = tokens.accountId, !account.isEmpty else { return nil }
+        return Login(accessToken: token, accountID: account, expiresAt: expiry(of: token))
     }
 
-    private func reading(in file: SessionFile) -> WebUsageData? {
-        if let cached = readings[file.path], cached.modified == file.modified {
-            return cached.reading
-        }
-        let reading = Self.lastReading(atPath: file.path)
-        readings[file.path] = (file.modified, reading)
-        return reading
+    /// The `exp` claim of a JWT, without verifying it: it only decides whether
+    /// a request is worth sending.
+    private nonisolated static func expiry(of jwt: String) -> Date? {
+        let parts = jwt.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
+        guard let data = Data(base64Encoded: payload),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let exp = claims["exp"] as? Double else { return nil }
+        return Date(timeIntervalSince1970: exp)
     }
 
-    /// Scans backwards a chunk at a time: the reading wanted is near the end,
-    /// and a long session runs to tens of megabytes.
-    private static func lastReading(atPath path: String) -> WebUsageData? {
-        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
-        defer { try? handle.close() }
-        guard var offset = try? handle.seekToEnd() else { return nil }
+    func fetchUsage() async throws -> WebUsageData {
+        // Read on every fetch: Codex rewrites the file when it refreshes.
+        guard let login = Self.readLogin() else { throw UsageError.noCredentials }
+        if let expiresAt = login.expiresAt, expiresAt <= Date() { throw UsageError.tokenExpired }
 
-        let chunkSize: UInt64 = 256 * 1024
-        // The start of a line whose beginning lies in a chunk not read yet.
-        var carry = Data()
-        while offset > 0 {
-            let start = offset > chunkSize ? offset - chunkSize : 0
-            guard (try? handle.seek(toOffset: start)) != nil,
-                  let chunk = try? handle.read(upToCount: Int(offset - start)) else { return nil }
-            offset = start
+        var request = URLRequest(url: usageURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(login.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(login.accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-            var lines = (chunk + carry).split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
-            // Only the first line can be cut off, and only when there is more
-            // file before this chunk.
-            carry = start > 0 ? Data(lines.removeFirst()) : Data()
-            for line in lines.reversed() {
-                if let reading = parse(Data(line)) { return reading }
-            }
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw UsageError.networkError(error)
         }
-        return nil
+        guard let http = response as? HTTPURLResponse else { throw UsageError.invalidResponse }
+        switch http.statusCode {
+        case 200...299: break
+        case 401, 403: throw UsageError.tokenExpired
+        case 429: throw UsageError.rateLimited
+        default: throw UsageError.invalidResponse
+        }
+        guard let usage = Self.parse(data, at: Date()) else { throw UsageError.invalidResponse }
+        return usage
     }
 
-    private static let tokenCountMarker = Data("\"token_count\"".utf8)
-    private static let sessionWindowMinutes = 300
-    private static let weeklyWindowMinutes = 10080
+    private struct Response: Decodable {
+        let rateLimit: RateLimit?
 
-    private struct Event: Decodable {
-        let timestamp: String
-        let payload: Payload
-
-        struct Payload: Decodable {
-            let type: String
-            let rateLimits: RateLimits?
-        }
-
-        struct RateLimits: Decodable {
-            let limitId: String?
-            let primary: Window?
-            let secondary: Window?
+        struct RateLimit: Decodable {
+            let primaryWindow: Window?
+            let secondaryWindow: Window?
         }
 
         struct Window: Decodable {
             let usedPercent: Double?
-            let windowMinutes: Int?
-            let resetsAt: Double?
+            let limitWindowSeconds: Int?
+            let resetAt: Double?
         }
     }
 
-    /// A reading from one line, or nil when the line holds none. Only the
-    /// `codex` limit counts (older Codex wrote no `limit_id`); `premium` and
-    /// sessions on local models report every window null.
-    ///
-    /// Windows are matched by length, not position: `primary` is usually the
-    /// 5-hour window, but some models report only a weekly one there.
-    static func parse(_ line: Data) -> WebUsageData? {
-        guard line.range(of: tokenCountMarker) != nil else { return nil }
+    private static let sessionWindowSeconds = 5 * 3600
+    private static let weeklyWindowSeconds = 7 * 86400
+
+    /// Windows are matched by length, not by primary/secondary: Codex's own
+    /// session logs show some models reporting only a weekly window, as primary.
+    static func parse(_ data: Data, at now: Date) -> WebUsageData? {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        guard let event = try? decoder.decode(Event.self, from: line),
-              event.payload.type == "token_count",
-              let limits = event.payload.rateLimits,
-              (limits.limitId ?? "codex") == "codex",
-              let taken = parseDate(event.timestamp) else { return nil }
+        guard let limits = (try? decoder.decode(Response.self, from: data))?.rateLimit else { return nil }
 
-        let windows = [limits.primary, limits.secondary].compactMap { $0 }
-        func window(minutes: Int) -> (usage: Double, resetsAt: Date?)? {
-            guard let match = windows.first(where: { $0.windowMinutes == minutes }),
+        let windows = [limits.primaryWindow, limits.secondaryWindow].compactMap { $0 }
+        func window(seconds: Int) -> (usage: Double, resetsAt: Date?)? {
+            guard let match = windows.first(where: { $0.limitWindowSeconds == seconds }),
                   let used = match.usedPercent else { return nil }
-            return (used, match.resetsAt.map { Date(timeIntervalSince1970: $0) })
+            return (used, match.resetAt.map { Date(timeIntervalSince1970: $0) })
         }
-        // Every reading seen so far (Plus plan) carries a weekly window, and the
-        // card has no shape for one without it, so such a line is skipped.
-        guard let weekly = window(minutes: weeklyWindowMinutes) else { return nil }
-        let session = window(minutes: sessionWindowMinutes)
+        // The card has no shape for a reading without a weekly window.
+        guard let weekly = window(seconds: weeklyWindowSeconds) else { return nil }
+        let session = window(seconds: sessionWindowSeconds)
 
         return WebUsageData(
             sessionUsage: session?.usage,
-            sessionResetsAt: session?.resetsAt ?? taken,
+            sessionResetsAt: session?.resetsAt ?? now,
             weeklyUsage: weekly.usage,
-            weeklyResetsAt: weekly.resetsAt ?? taken,
+            weeklyResetsAt: weekly.resetsAt ?? now,
             scopedLimits: [],
-            lastUpdated: taken,
+            lastUpdated: now,
             reportedSessionResetsAt: session?.resetsAt,
             reportedWeeklyResetsAt: weekly.resetsAt
         )
-    }
-
-    private static let timestampFormatters: [ISO8601DateFormatter] = {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let whole = ISO8601DateFormatter()
-        whole.formatOptions = [.withInternetDateTime]
-        return [fractional, whole]
-    }()
-
-    private static func parseDate(_ string: String) -> Date? {
-        timestampFormatters.lazy.compactMap { $0.date(from: string) }.first
     }
 }
