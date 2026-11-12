@@ -69,8 +69,16 @@ struct WebUsageData {
 struct ModelSpend: Identifiable {
     let model: String
     let cost: Double
+    var provider: SpendProvider = .claude
 
     var id: String { model }
+}
+
+/// Which tool's tokens a cost came from. The spend card shows one combined
+/// total and splits it by this.
+enum SpendProvider: String {
+    case claude
+    case codex
 }
 
 extension Double {
@@ -198,21 +206,130 @@ extension Int {
 // chart shows a real gap rather than closing it up.
 struct DailySpend: Identifiable {
     let date: Date
-    let cost: Double
+    var claude: Double = 0
+    var codex: Double = 0
 
+    var cost: Double { claude + codex }
     var id: Date { date }
+}
+
+/// One window's spend, split by tool.
+struct SpendSplit {
+    var claude: Double = 0
+    var codex: Double = 0
+
+    var total: Double { claude + codex }
 }
 
 // Spend is API-equivalent, not money charged: on a subscription these tokens are
 // already paid for, so this measures what they'd have cost billed per-token.
 struct SpendData {
-    let today: Double
-    let week: Double
-    let last30: Double
+    let today: SpendSplit
+    let week: SpendSplit
+    let last30: SpendSplit
     let last30ByModel: [ModelSpend]
     /// Rolling window ending today, oldest first.
     let daily: [DailySpend]
     let lastUpdated: Date
+
+    /// Whether any Codex spend falls in the window. Without it the card looks
+    /// exactly as it did before Codex was counted: no split lines, no legend.
+    var hasCodex: Bool { last30.codex > 0 }
+}
+
+/// Cost by local day ("yyyy-MM-dd") and then by model display name — what each
+/// spend scanner produces, and all the summary needs.
+typealias SpendLedger = [String: [String: Double]]
+
+enum SpendDay {
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        // Pinned, per Apple's guidance for fixed-format dates: left alone, the
+        // formatter inherits the user's calendar, and "yyyy" under a Buddhist or
+        // Japanese one renders 2026 as 2569 or 0008 — day keys would stop
+        // matching the ones Calendar.current is compared against. The time zone
+        // stays on the system's, since a day here means the user's local day.
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    static func key(for date: Date) -> String {
+        formatter.string(from: date)
+    }
+
+    static func date(from key: String) -> Date? {
+        formatter.date(from: key)
+    }
+}
+
+extension SpendData {
+    /// Days of history the chart plots and the longest total covers.
+    static let windowDays = 30
+
+    /// Day rollups older than this are dropped from both spend caches. Must
+    /// exceed `windowDays` with room to spare.
+    static let retentionDays = 100
+
+    /// Totals for today, the last 7 and the last `windowDays` days, plus the
+    /// chart's days, from each tool's ledger. The window is rolling and shared
+    /// with the chart, so the last-30-days total is exactly the sum of the bars.
+    static func summarize(claude: SpendLedger, codex: SpendLedger,
+                          windowDays: Int = windowDays, now: Date = Date()) -> SpendData {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        let weekStart = calendar.date(byAdding: .day, value: -6, to: today) ?? today
+        let windowStart = calendar.date(byAdding: .day, value: -(windowDays - 1), to: today) ?? today
+
+        var todayTotal = SpendSplit()
+        var weekTotal = SpendSplit()
+        var windowTotal = SpendSplit()
+        var byModel: [String: (cost: Double, provider: SpendProvider)] = [:]
+        var byDay: [String: SpendSplit] = [:]
+
+        for (provider, ledger) in [(SpendProvider.claude, claude), (.codex, codex)] {
+            func add(_ cost: Double, to split: inout SpendSplit) {
+                switch provider {
+                case .claude: split.claude += cost
+                case .codex: split.codex += cost
+                }
+            }
+            for (day, models) in ledger {
+                guard let date = SpendDay.date(from: day) else { continue }
+                for (model, cost) in models {
+                    add(cost, to: &byDay[day, default: SpendSplit()])
+                    if date >= today { add(cost, to: &todayTotal) }
+                    if date >= weekStart { add(cost, to: &weekTotal) }
+                    if date >= windowStart {
+                        add(cost, to: &windowTotal)
+                        byModel[model, default: (0, provider)].cost += cost
+                    }
+                }
+            }
+        }
+
+        // Walk the window day by day rather than reading back the keys present,
+        // so a day with no activity yields a zero-height bar instead of being
+        // dropped and letting its neighbours close the gap.
+        var daily: [DailySpend] = []
+        for offset in stride(from: -(windowDays - 1), through: 0, by: 1) {
+            guard let date = calendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            let split = byDay[SpendDay.key(for: date)] ?? SpendSplit()
+            daily.append(DailySpend(date: date, claude: split.claude, codex: split.codex))
+        }
+
+        return SpendData(
+            today: todayTotal,
+            week: weekTotal,
+            last30: windowTotal,
+            last30ByModel: byModel
+                .map { ModelSpend(model: $0.key, cost: $0.value.cost, provider: $0.value.provider) }
+                .sorted { $0.cost > $1.cost },
+            daily: daily,
+            lastUpdated: now
+        )
+    }
 }
 
 enum UsageError: Error, LocalizedError {

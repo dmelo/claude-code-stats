@@ -13,7 +13,7 @@ struct SpendCardView: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textSecondary)
-                    .help("What these tokens would cost at API rates. Your subscription already covers them — this is not money charged.")
+                    .help("What these tokens would cost at API rates. On a subscription they are already covered — this is not money charged. Codex used with an API key is billed per token, so that share is real.")
             }
 
             row("Today", spend.today)
@@ -24,7 +24,7 @@ struct SpendCardView: View {
                 Divider()
                     .background(Theme.divider)
 
-                SpendChartView(daily: spend.daily)
+                SpendChartView(daily: spend.daily, showsCodex: spend.hasCodex)
             }
 
             if !spend.last30ByModel.isEmpty {
@@ -32,7 +32,12 @@ struct SpendCardView: View {
                     .background(Theme.divider)
 
                 ForEach(spend.last30ByModel) { entry in
-                    HStack {
+                    HStack(spacing: 5) {
+                        // Only once there are two tools to tell apart.
+                        if spend.hasCodex {
+                            swatch(entry.provider)
+                        }
+
                         Text(entry.model)
                             .font(.system(size: 10))
                             .foregroundColor(Theme.textSecondary)
@@ -51,18 +56,55 @@ struct SpendCardView: View {
         .cornerRadius(8)
     }
 
-    private func row(_ label: String, _ amount: Double) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 11))
-                .foregroundColor(Theme.textSecondary)
+    // The combined total, then — once Codex has spend in the window — its
+    // split beneath, so the headline stays one number.
+    private func row(_ label: String, _ amount: SpendSplit) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.textSecondary)
 
-            Spacer()
+                Spacer()
 
-            Text(amount.usd)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundColor(Theme.textPrimary)
+                Text(amount.total.usd)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(Theme.textPrimary)
+            }
+
+            if spend.hasCodex {
+                HStack(spacing: 4) {
+                    Spacer()
+                    swatch(.claude)
+                    splitText("Claude \(amount.claude.usd)")
+                    swatch(.codex)
+                        .padding(.leading, 4)
+                    splitText("Codex \(amount.codex.usd)")
+                }
+            }
         }
+    }
+
+    private func splitText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundColor(Theme.textSecondary)
+    }
+
+    private func swatch(_ provider: SpendProvider) -> some View {
+        SpendSwatch(provider: provider)
+    }
+}
+
+/// Which tool a figure belongs to, as a small square in its chart colour. The
+/// text beside it always names the tool too.
+struct SpendSwatch: View {
+    let provider: SpendProvider
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1.5)
+            .fill(Theme.chartColor(for: provider))
+            .frame(width: 6, height: 6)
     }
 }
 
@@ -72,18 +114,20 @@ struct SpendCardView: View {
     let sample = (0..<30).map { offset in
         DailySpend(
             date: calendar.date(byAdding: .day, value: offset - 29, to: today)!,
-            cost: [6, 13].contains(offset) ? 0 : Double.random(in: 40...260)
+            claude: [6, 13].contains(offset) ? 0 : Double.random(in: 40...260),
+            codex: offset % 3 == 0 ? Double.random(in: 5...60) : 0
         )
     }
     return SpendCardView(spend: SpendData(
-        today: 179.60,
-        week: 1301.38,
-        last30: 3778.49,
+        today: SpendSplit(claude: 179.60, codex: 12.40),
+        week: SpendSplit(claude: 1301.38, codex: 88.10),
+        last30: SpendSplit(claude: 3778.49, codex: 301.75),
         last30ByModel: [
             ModelSpend(model: "Fable 5", cost: 1933.21),
             ModelSpend(model: "Opus 4.8", cost: 1698.25),
+            ModelSpend(model: "GPT-6 Astra", cost: 250.12, provider: .codex),
             ModelSpend(model: "Sonnet 5", cost: 145.61),
-            ModelSpend(model: "Haiku 4.5", cost: 1.41),
+            ModelSpend(model: "GPT-5.6 Luna", cost: 51.63, provider: .codex),
         ],
         daily: sample,
         lastUpdated: Date()
