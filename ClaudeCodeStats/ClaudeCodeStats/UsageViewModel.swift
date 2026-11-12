@@ -45,8 +45,25 @@ enum UsageAccount: Identifiable, Hashable {
     /// exists: Codex rewrites the file when it refreshes, and one read landing
     /// mid-write would otherwise drop the account and its reading.
     static func discover(keepingCodex: Bool = false) -> [UsageAccount] {
-        let codex = CodexUsageService.hasLogin || (keepingCodex && CodexUsageService.hasAuthFile)
+        let codex = CodexTracking.isEnabled
+            && (CodexUsageService.hasLogin || (keepingCodex && CodexUsageService.hasAuthFile))
         return AimuxService.discoverAccounts().map(UsageAccount.claude) + (codex ? [.codex] : [])
+    }
+}
+
+/// The Settings switch for Codex. Off, the app makes no Codex request and
+/// reads no Codex session log: no limits card, no rings, no spend.
+enum CodexTracking {
+    static let key = "trackCodex"
+
+    static var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+
+    /// Whether Codex has been used on this Mac (a login file or a session-log
+    /// folder), which is when Settings offers the switch.
+    static var isDetected: Bool {
+        CodexUsageService.hasAuthFile || CodexCostService.hasSessions
     }
 }
 
@@ -150,11 +167,7 @@ class UsageViewModel: ObservableObject {
         defer { isLoading = false }
 
         // Pick up profiles added to or removed from aimux since the last pass.
-        let discovered = UsageAccount.discover(keepingCodex: accounts.contains(.codex))
-        if discovered != accounts {
-            accounts = discovered
-            usageByAccount = usageByAccount.filter { key, _ in discovered.contains { $0.id == key } }
-        }
+        rediscoverAccounts()
 
         // Concurrently: each account has its own token, service instance and
         // dictionary slot, and everything else they touch is main-actor state
@@ -172,6 +185,24 @@ class UsageViewModel: ObservableObject {
         await refreshStatus()
         await refreshSpend()
         await refreshRTKSavings()
+    }
+
+    private func rediscoverAccounts() {
+        let discovered = UsageAccount.discover(keepingCodex: accounts.contains(.codex))
+        if discovered != accounts {
+            accounts = discovered
+            usageByAccount = usageByAccount.filter { key, _ in discovered.contains { $0.id == key } }
+        }
+    }
+
+    /// Applies the Track Codex switch at once rather than at the next refresh:
+    /// the card, rings and spend share appear or go together.
+    func codexTrackingChanged() async {
+        rediscoverAccounts()
+        if accounts.contains(.codex) {
+            await refreshCodexUsage()
+        }
+        await refreshSpend()
     }
 
     private func refreshUsage(for account: UsageAccount) async {
@@ -260,7 +291,7 @@ class UsageViewModel: ObservableObject {
     func refreshSpend() async {
         // Concurrently: separate actors over separate files.
         async let claude = CostService.shared.fetchLedger()
-        async let codex = CodexCostService.shared.fetchLedger()
+        async let codex: SpendLedger = CodexTracking.isEnabled ? await CodexCostService.shared.fetchLedger() : [:]
         spend = SpendData.summarize(claude: await claude, codex: await codex)
     }
 

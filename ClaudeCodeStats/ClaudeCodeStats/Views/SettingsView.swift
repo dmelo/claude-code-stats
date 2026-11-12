@@ -9,6 +9,9 @@ struct SettingsView: View {
     @AppStorage("appearancePreference") private var appearance: AppearancePreference = .system
     @AppStorage(ProfilePreferences.hiddenKey) private var hiddenProfilesRaw = ""
     @AppStorage(ProfilePreferences.labelsKey) private var profileLabelsRaw = ""
+    @AppStorage(CodexTracking.key) private var trackCodex = true
+    // Checked once per Settings visit: offered only where Codex has been used.
+    @State private var codexDetected = CodexTracking.isDetected
     // The view model's list, so Settings and the menu bar never disagree.
     private var accounts: [UsageAccount] { viewModel.accounts }
     // The Claude logins, whose authentication this section reports. Codex's
@@ -31,6 +34,9 @@ struct SettingsView: View {
                 authStatusSection
                 appearanceSection
                 menuBarDisplaySection
+                if codexDetected {
+                    codexSection
+                }
                 if accounts.count > 1 {
                     profilesSection
                 }
@@ -155,6 +161,31 @@ struct SettingsView: View {
                 .foregroundColor(Theme.textSecondary)
                 .toggleStyle(.switch)
                 .controlSize(.mini)
+        }
+        .padding(12)
+        .background(Theme.cardBackground)
+        .cornerRadius(8)
+    }
+
+    private var codexSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Codex")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Theme.textPrimary)
+
+            Toggle("Track Codex", isOn: $trackCodex)
+                .font(.system(size: 11))
+                .foregroundColor(Theme.textSecondary)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .onChange(of: trackCodex) { _, _ in
+                    Task { await viewModel.codexTrackingChanged() }
+                }
+
+            Text("Off, Codex's limits, rings and spend are hidden, and the app neither contacts ChatGPT nor reads Codex's session logs.")
+                .font(.system(size: 10))
+                .foregroundColor(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .background(Theme.cardBackground)

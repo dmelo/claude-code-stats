@@ -82,6 +82,7 @@ If the [Codex CLI](https://github.com/openai/codex) is signed in with ChatGPT on
 
 - **Where the numbers come from:** the same ChatGPT usage endpoint the Codex CLI uses, polled with your Claude limits, using the login Codex keeps in `~/.codex/auth.json` (or `$CODEX_HOME/auth.json` — but a shell export doesn't reach an app opened from Finder or at login; use `launchctl setenv CODEX_HOME …`). They match chatgpt.com's Usage page, including use from other machines and from the other ChatGPT surfaces that share the limits.
 - **The login is only read.** The app never refreshes it; Codex does that whenever it runs. A Codex login lasts about ten days, so if you haven't run Codex on this Mac for that long the card asks you to run `codex` once.
+- **Turning it off:** Settings → Codex → **Track Codex** (shown once Codex has been used on this Mac). Off, Codex's card, rings and spend are hidden, and the app neither contacts ChatGPT nor reads Codex's session logs.
 - **Spend:** Codex's API-equivalent spend is added to the spend card from Codex's session logs, in its own colour (see [Features](#features)).
 
 For every account, Claude or Codex, a card whose last reading is more than 15 minutes old (refreshing has been failing) says so ("As of 3h ago"), and a window whose reset has passed since that reading shows "—" and "Reset since this reading" rather than a stale figure.

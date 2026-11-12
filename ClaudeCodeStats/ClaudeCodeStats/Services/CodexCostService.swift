@@ -132,15 +132,22 @@ actor CodexCostService {
     /// ~/.config/codex/sessions, which Codex never reads: other machines'
     /// sessions mirrored there, one subfolder per machine, are counted
     /// without Codex here ever listing them as its own.
-    private func sessionPaths() -> [String] {
-        let home = fileManager.homeDirectoryForCurrentUser.path
-        let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"].flatMap { $0.isEmpty ? nil : $0 }
-            ?? "\(home)/.codex"
+    nonisolated static var sessionRoots: [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
         var seen = Set<String>()
-        let roots = ["\(codexHome)/sessions", "\(home)/.config/codex/sessions"]
+        return ["\(CodexUsageService.codexHome)/sessions", "\(home)/.config/codex/sessions"]
             .map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
             .filter { seen.insert($0).inserted }
-        return roots.flatMap { root -> [String] in
+    }
+
+    /// Whether any session-log folder exists, for deciding whether Codex is
+    /// on this Mac at all.
+    nonisolated static var hasSessions: Bool {
+        sessionRoots.contains { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    private func sessionPaths() -> [String] {
+        Self.sessionRoots.flatMap { root -> [String] in
             guard let walker = fileManager.enumerator(atPath: root) else { return [] }
             return walker.compactMap { entry in
                 guard let name = entry as? String, name.hasSuffix(".jsonl") else { return nil }
