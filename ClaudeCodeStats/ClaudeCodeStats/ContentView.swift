@@ -130,22 +130,39 @@ struct ContentView: View {
                 UsageCardView(
                     title: "Current Session",
                     usage: session,
-                    resetsAt: usage.sessionResetsAt
+                    resetsAt: usage.sessionResetsAt,
+                    reading: usage,
+                    reportedResetsAt: usage.reportedSessionResetsAt
                 )
             }
 
             UsageCardView(
                 title: "Weekly Limit (All Models)",
                 usage: usage.weeklyUsage,
-                resetsAt: usage.weeklyResetsAt
+                resetsAt: usage.weeklyResetsAt,
+                reading: usage,
+                reportedResetsAt: usage.reportedWeeklyResetsAt
             )
 
             ForEach(usage.scopedLimits) { limit in
                 UsageCardView(
                     title: "Weekly Limit (\(limit.name))",
                     usage: limit.usage,
-                    resetsAt: limit.resetsAt
+                    resetsAt: limit.resetsAt,
+                    reading: usage,
+                    reportedResetsAt: limit.reportedResetsAt
                 )
+            }
+
+            // The per-account card says this inside itself; here the cards are
+            // one per limit, so it goes once beneath them.
+            TimelineView(.everyMinute) { context in
+                if let age = usage.ageText(at: context.date) {
+                    Text(age)
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
 
             localStatsCards
@@ -153,14 +170,15 @@ struct ContentView: View {
         .padding(12)
     }
 
-    // One card per aimux profile, then the local stats once for all of them:
-    // the profiles share one transcripts dir, and a transcript records no
-    // account, so spend can't honestly be split per profile.
+    // One card per account (each aimux profile, then Codex), then the local
+    // stats once for all of them: the profiles share one transcripts dir, and a
+    // transcript records no account, so spend can't honestly be split per
+    // profile.
     private var multiAccountView: some View {
         VStack(spacing: 8) {
             ForEach(viewModel.accounts) { account in
                 AccountUsageCardView(
-                    name: account.profileName ?? "Default",
+                    name: account.displayName,
                     state: viewModel.usageByAccount[account.id]
                 )
             }

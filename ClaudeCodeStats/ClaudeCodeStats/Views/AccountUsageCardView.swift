@@ -32,39 +32,54 @@ struct AccountUsageCardView: View {
     }
 
     private func limitRows(_ usage: WebUsageData) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let session = usage.sessionUsage {
-                limitRow(title: "Session", usage: session, resetsAt: usage.sessionResetsAt)
-            }
-            limitRow(title: "Weekly", usage: usage.weeklyUsage, resetsAt: usage.weeklyResetsAt)
-            ForEach(usage.scopedLimits) { limit in
-                limitRow(title: limit.name, usage: limit.usage, resetsAt: limit.resetsAt)
+        TimelineView(.everyMinute) { context in
+            VStack(alignment: .leading, spacing: 8) {
+                if let session = usage.sessionUsage {
+                    limitRow(title: "Session", value: session, resetsAt: usage.sessionResetsAt,
+                             reportedResetsAt: usage.reportedSessionResetsAt, in: usage, now: context.date)
+                }
+                limitRow(title: "Weekly", value: usage.weeklyUsage, resetsAt: usage.weeklyResetsAt,
+                         reportedResetsAt: usage.reportedWeeklyResetsAt, in: usage, now: context.date)
+                ForEach(usage.scopedLimits) { limit in
+                    limitRow(title: limit.name, value: limit.usage, resetsAt: limit.resetsAt,
+                             reportedResetsAt: limit.reportedResetsAt, in: usage, now: context.date)
+                }
+
+                if let age = usage.ageText(at: context.date) {
+                    Text(age)
+                        .font(.system(size: 10))
+                        .foregroundColor(Theme.textSecondary)
+                }
             }
         }
     }
 
-    private func limitRow(title: String, usage: Double, resetsAt: Date) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+    private func limitRow(
+        title: String, value: Double, resetsAt: Date, reportedResetsAt: Date?,
+        in usage: WebUsageData, now: Date
+    ) -> some View {
+        // nil once the window has reset since the reading: what has been used
+        // since is unknown, so no bar and no figure rather than a guessed 0%.
+        let shown = usage.usage(value, reportedResetsAt: reportedResetsAt, at: now)
+        return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
                 Text(title)
                     .font(.system(size: 11))
                     .foregroundColor(Theme.textSecondary)
                     .frame(width: 52, alignment: .leading)
 
-                ProgressBarView(progress: usage)
+                ProgressBarView(progress: shown ?? 0)
 
-                Text("\(Int(usage))%")
+                Text(shown.map { "\(Int($0))%" } ?? "—")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(Theme.textPrimary)
                     .frame(width: 36, alignment: .trailing)
             }
 
-            TimelineView(.everyMinute) { context in
-                Text(ResetCountdown.text(until: resetsAt, now: context.date))
-                    .font(.system(size: 10))
-                    .foregroundColor(Theme.textSecondary)
-                    .padding(.leading, 60)
-            }
+            Text(shown == nil ? "Reset since this reading" : ResetCountdown.text(until: resetsAt, now: now))
+                .font(.system(size: 10))
+                .foregroundColor(Theme.textSecondary)
+                .padding(.leading, 60)
         }
     }
 

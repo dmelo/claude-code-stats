@@ -9,15 +9,62 @@ struct AccountUsage {
     var needsLogin = false
 }
 
+// Something the app shows limits for: a Claude Code login, or Codex. Views only
+// ever see an account's id, its name and its AccountUsage — which service fills
+// that in is decided once, in UsageViewModel.refreshUsage(for:).
+enum UsageAccount: Identifiable, Hashable {
+    case claude(ClaudeAccount)
+    case codex
+
+    var id: String {
+        switch self {
+        case .claude(let account): return account.id
+        case .codex: return "codex"
+        }
+    }
+
+    /// The name per-profile menu bar preferences are stored under: the aimux
+    /// profile name, or "codex". Nil for the plain no-aimux Claude login.
+    var profileName: String? {
+        switch self {
+        case .claude(let account): return account.profileName
+        case .codex: return "codex"
+        }
+    }
+
+    /// The popover card's title.
+    var displayName: String {
+        switch self {
+        case .claude(let account): return account.profileName ?? "Claude"
+        case .codex: return "Codex"
+        }
+    }
+
+    /// The Claude logins first, in aimux config order, then Codex when it is
+    /// logged in with ChatGPT. Once shown, Codex stays while its login file
+    /// exists: Codex rewrites the file when it refreshes, and one read landing
+    /// mid-write would otherwise drop the account and its reading.
+    static func discover(keepingCodex: Bool = false) -> [UsageAccount] {
+        let codex = CodexUsageService.hasLogin || (keepingCodex && CodexUsageService.hasAuthFile)
+        return AimuxService.discoverAccounts().map(UsageAccount.claude) + (codex ? [.codex] : [])
+    }
+}
+
 @MainActor
 class UsageViewModel: ObservableObject {
-    // Every login being polled, in aimux config order. Exactly one (the default
-    // ~/.claude login) when aimux isn't set up.
-    @Published private(set) var accounts: [ClaudeAccount] = AimuxService.discoverAccounts()
+    // Every account being polled: one per aimux claude profile (exactly one,
+    // the default ~/.claude login, when aimux isn't set up), then Codex.
+    @Published private(set) var accounts: [UsageAccount] = UsageAccount.discover()
     @Published private(set) var usageByAccount: [String: AccountUsage] = [:]
     @Published var isLoading = false
 
     var isMultiAccount: Bool { accounts.count > 1 }
+
+    /// The Claude logins alone: the ones with credentials to check and a
+    /// command to re-authenticate.
+    var claudeAccounts: [ClaudeAccount] {
+        accounts.compactMap { if case .claude(let account) = $0 { return account } else { return nil } }
+    }
 
     // The first account's reading, for the single-account popover.
     var webUsage: WebUsageData? {
@@ -42,7 +89,7 @@ class UsageViewModel: ObservableObject {
     }
 
     var allAccountsHaveCredentials: Bool {
-        accounts.allSatisfy(hasCredentials)
+        claudeAccounts.allSatisfy(hasCredentials)
     }
 
     // When the last full pass over the accounts finished. The popover-open
@@ -103,7 +150,7 @@ class UsageViewModel: ObservableObject {
         defer { isLoading = false }
 
         // Pick up profiles added to or removed from aimux since the last pass.
-        let discovered = AimuxService.discoverAccounts()
+        let discovered = UsageAccount.discover(keepingCodex: accounts.contains(.codex))
         if discovered != accounts {
             accounts = discovered
             usageByAccount = usageByAccount.filter { key, _ in discovered.contains { $0.id == key } }
@@ -125,6 +172,44 @@ class UsageViewModel: ObservableObject {
         await refreshStatus()
         await refreshSpend()
         await refreshRTKSavings()
+    }
+
+    private func refreshUsage(for account: UsageAccount) async {
+        switch account {
+        case .claude(let claude): await refreshUsage(for: claude)
+        case .codex: await refreshCodexUsage()
+        }
+    }
+
+    // Same shape as a Claude login's refresh: keep the last reading through a
+    // transient failure, and hide it once the login has lapsed. Only the
+    // messages differ — Codex refreshes its own login when it runs.
+    private func refreshCodexUsage() async {
+        let id = UsageAccount.codex.id
+        var entry = usageByAccount[id] ?? AccountUsage()
+        // As for a Claude login: with no reading to fall back on, clear the old
+        // error so the retry shows as loading rather than as a fresh failure.
+        if entry.usage == nil {
+            entry.error = nil
+            usageByAccount[id] = entry
+        }
+        do {
+            entry = AccountUsage(usage: try await CodexUsageService.shared.fetchUsage())
+        } catch {
+            switch error as? UsageError {
+            case .tokenExpired:
+                entry.needsLogin = true
+                entry.error = "Codex login expired. Run 'codex' to refresh it."
+            case .noCredentials:
+                entry.needsLogin = true
+                entry.error = "No Codex login found. Run 'codex login' to sign in with ChatGPT."
+            default:
+                if !entry.needsLogin {
+                    entry.error = error.localizedDescription
+                }
+            }
+        }
+        usageByAccount[id] = entry
     }
 
     private func refreshUsage(for account: ClaudeAccount) async {
