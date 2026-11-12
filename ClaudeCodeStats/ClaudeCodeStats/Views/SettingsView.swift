@@ -9,7 +9,7 @@ struct SettingsView: View {
     @AppStorage("appearancePreference") private var appearance: AppearancePreference = .system
     @AppStorage(ProfilePreferences.hiddenKey) private var hiddenProfilesRaw = ""
     @AppStorage(ProfilePreferences.labelsKey) private var profileLabelsRaw = ""
-    @AppStorage(CodexTracking.key) private var trackCodex = true
+    @AppStorage(CodexTracking.key) private var trackCodex = CodexTracking.defaultValue
     // Checked once per Settings visit: offered only where Codex has been used.
     @State private var codexDetected = CodexTracking.isDetected
     // The view model's list, so Settings and the menu bar never disagree.

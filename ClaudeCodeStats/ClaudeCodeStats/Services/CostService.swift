@@ -174,10 +174,8 @@ private func price(for model: String) -> ModelPrice? {
     priceTable.first { model.hasPrefix($0.prefix) }?.price
 }
 
-/// Day rollups older than this are dropped from the cache. Must exceed the
-/// longest window we report (the last-30-days total and the chart, both
-/// `SpendData.windowDays`) with room to spare.
-private let retentionDays = 100
+/// Day rollups older than this are dropped from the cache.
+private let retentionDays = SpendData.retentionDays
 
 /// Bump to discard cached rollups and re-scan every transcript from scratch.
 ///

@@ -13,7 +13,7 @@ struct SpendCardView: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 10))
                     .foregroundColor(Theme.textSecondary)
-                    .help("What these tokens would cost at API rates. Your subscriptions already cover them — this is not money charged.")
+                    .help("What these tokens would cost at API rates. On a subscription they are already covered — this is not money charged. Codex used with an API key is billed per token, so that share is real.")
             }
 
             row("Today", spend.today)
@@ -91,8 +91,17 @@ struct SpendCardView: View {
             .foregroundColor(Theme.textSecondary)
     }
 
-    // The colour carries which tool; the text beside it always names it too.
     private func swatch(_ provider: SpendProvider) -> some View {
+        SpendSwatch(provider: provider)
+    }
+}
+
+/// Which tool a figure belongs to, as a small square in its chart colour. The
+/// text beside it always names the tool too.
+struct SpendSwatch: View {
+    let provider: SpendProvider
+
+    var body: some View {
         RoundedRectangle(cornerRadius: 1.5)
             .fill(Theme.chartColor(for: provider))
             .frame(width: 6, height: 6)

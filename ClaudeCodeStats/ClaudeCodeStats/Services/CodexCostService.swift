@@ -6,23 +6,28 @@ import Foundation
 // never see. A turn is recorded on the machine that ran it, so another machine's
 // spend only needs its logs mirrored in.
 //
-// Each turn appends a `token_count` event carrying the session's running total
-// and the last request's usage; `turn_context` events say which model is in use:
+// `turn_context` events say which model is in use, and current Codex writes a
+// `token_usage_record` per model response with that response's usage:
 //
 //   {"timestamp":"…","type":"turn_context","payload":{"model":"gpt-6-astra",…}}
-//   {"timestamp":"…","type":"event_msg","payload":{"type":"token_count","info":{
-//     "total_token_usage":{"input_tokens":…,"cached_input_tokens":…,"output_tokens":…},
-//     "last_token_usage":{…same fields…}}}}
+//   {"timestamp":"…","type":"token_usage_record","payload":{"response_id":"resp_…",
+//     "usage":{"input_tokens":…,"cached_input_tokens":…,"output_tokens":…},…}}
 //
-// `token_count` repeats with an unchanged total (a rate-limit update, say), so a
-// turn is priced only where the total moves — and wherever it moves, the change
-// equals `last_token_usage` exactly (checked on every event of two machines'
-// logs). `input_tokens` includes the cached ones and `output_tokens` includes
+// Older logs have no records, only `token_count` events carrying the session's
+// running total and the last request's usage. There a turn is priced where the
+// total moves (it repeats unchanged for, say, a rate-limit update), and the
+// change equals `last_token_usage`. But a compaction request never enters that
+// total, so a log is priced from its records from the first one on, and from
+// `token_count` only before it. (In every log checked, a session's first record
+// comes before its first `token_count`.) Priced from records, spend matches
+// `ccusage codex` to the cent; from `token_count` alone it was about 3% low.
+// `input_tokens` includes the cached ones and `output_tokens` includes
 // reasoning, as OpenAI bills them.
 //
-// No session appears in more than one file, and no event is copied between
-// files, so unlike Claude Code's transcripts there is nothing to dedupe across
-// files.
+// A session is one file, named after its id. It can move — Codex archives it
+// to `archived_sessions`, a mirror folder can be renamed — so state is per path,
+// but each session id counts once. Forked sessions weren't in the logs this was
+// checked against; if a fork copies its parent's records, they count twice.
 
 private struct CodexPrice {
     let display: String
@@ -42,8 +47,9 @@ private struct CodexPrice {
 // more on several of these models, but the logs this was checked against
 // record a context window of about 258K, and their largest request was 242K
 // input tokens. Revisit if a model with a larger window turns up. And the Fast tier
-// costs more, but Codex records no service tier, so every turn is priced at
-// standard. Models OpenAI publishes no price for (gpt-reserve) and local
+// costs more: Codex records a thread's tier (`thread_settings.service_tier`), but
+// every log checked says "default", so the Fast rates aren't implemented and a
+// Fast turn is priced at standard. Models OpenAI publishes no price for (gpt-reserve) and local
 // models (served through Codex's other providers) are skipped.
 private let codexPrices: [String: CodexPrice] = [
     "gpt-6-astra": CodexPrice(display: "GPT-6 Astra", input: 10, cachedInput: 1.00, output: 50),
@@ -60,10 +66,15 @@ private let codexPrices: [String: CodexPrice] = [
 /// Bump to discard the cache and re-read every session log. Required for any
 /// change to the price table or the parsing, for the same reason as
 /// CostService's: costs are priced when a turn is first read.
-private let codexCacheVersion = 1
+private let codexCacheVersion = 2
 
-/// Matches CostService's: day rollups older than this are dropped.
-private let codexRetentionDays = 100
+/// How much of a file's start is kept to recognise it: the first line names
+/// the session, so a different file at the same path differs here.
+private let headLength = 256
+
+/// Unread logs are read this much at a time. A Codex session log can pass
+/// 500 MB, too much to load at once inside a menu bar app.
+private let chunkSize = 8 << 20
 
 private struct TokenTotals: Codable, Equatable {
     var input: Int = 0
@@ -76,7 +87,12 @@ private struct TokenTotals: Codable, Equatable {
 /// instead of adding to it.
 private struct FileState: Codable {
     var offset: UInt64 = 0
+    /// The file's first bytes, to tell a replaced file from a grown one.
+    var head: Data?
     var lastTotal: TokenTotals?
+    /// Set at the file's first `token_usage_record`; from then on its
+    /// `token_count` events are not priced.
+    var hasRecords = false
     var model: String?
     var days: SpendLedger = [:]
 }
@@ -115,8 +131,17 @@ actor CodexCostService {
         if isDirty {
             isDirty = !persist()
         }
+        // One state per session id: a session that moved (archived, or its
+        // mirror folder renamed) leaves its old path's days behind until they
+        // age out. The copy read furthest wins.
+        var sessions: [String: FileState] = [:]
+        for (path, state) in cache.files {
+            let id = Self.sessionID(path)
+            if let other = sessions[id], other.offset >= state.offset { continue }
+            sessions[id] = state
+        }
         var ledger: SpendLedger = [:]
-        for state in cache.files.values {
+        for state in sessions.values {
             for (day, models) in state.days {
                 for (model, cost) in models {
                     ledger[day, default: [:]][model, default: 0] += cost
@@ -128,14 +153,16 @@ actor CodexCostService {
 
     // MARK: - Scanning
 
-    /// Where Codex writes (`$CODEX_HOME/sessions`, ~/.codex by default) and
+    /// Where Codex writes (`$CODEX_HOME/sessions`, ~/.codex by default), where
+    /// it moves archived sessions (`archived_sessions`), and
     /// ~/.config/codex/sessions, which Codex never reads: other machines'
     /// sessions mirrored there, one subfolder per machine, are counted
     /// without Codex here ever listing them as its own.
     nonisolated static var sessionRoots: [String] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let codexHome = CodexUsageService.codexHome
         var seen = Set<String>()
-        return ["\(CodexUsageService.codexHome)/sessions", "\(home)/.config/codex/sessions"]
+        return ["\(codexHome)/sessions", "\(codexHome)/archived_sessions", "\(home)/.config/codex/sessions"]
             .map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
             .filter { seen.insert($0).inserted }
     }
@@ -156,31 +183,52 @@ actor CodexCostService {
         }
     }
 
+    /// The session id at the end of a log's name
+    /// (`rollout-<time>-<uuid>.jsonl`), else the path itself.
+    private static func sessionID(_ path: String) -> String {
+        let name = (path as NSString).lastPathComponent.replacingOccurrences(of: ".jsonl", with: "")
+        let id = String(name.suffix(36))
+        return UUID(uuidString: id) != nil ? id.lowercased() : path
+    }
+
     private func scan(path: String) {
         var state = cache.files[path] ?? FileState()
         guard let size = try? fileManager.attributesOfItem(atPath: path)[.size] as? UInt64 else { return }
-        // A file that shrank was rewritten: drop what it contributed and read
-        // it again from the start.
-        if size < state.offset { state = FileState() }
-        guard size > state.offset,
+        guard size != state.offset,
               let handle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: path)) else { return }
         defer { try? handle.close() }
-        guard (try? handle.seek(toOffset: state.offset)) != nil,
-              let data = try? handle.readToEnd(), !data.isEmpty,
-              // Stop at the last newline: a trailing fragment is Codex mid-write.
-              let lastNewline = data.lastIndex(of: UInt8(ascii: "\n")) else { return }
-        let complete = data[data.startIndex...lastNewline]
-
-        for line in complete.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: true) {
-            ingest(line: line, into: &state)
+        // A file that shrank, or whose start changed, was replaced: drop what
+        // it contributed and read it again from the start.
+        // (A head stored while the file was shorter than headLength is a prefix
+        // of the grown file's.)
+        let head = (try? handle.read(upToCount: headLength)) ?? Data()
+        if size < state.offset || state.head.map({ !head.starts(with: $0) }) == true {
+            state = FileState()
         }
-        state.offset += UInt64(complete.count)
+        state.head = head
+
+        guard (try? handle.seek(toOffset: state.offset)) != nil else { return }
+        let newline = UInt8(ascii: "\n")
+        var pending = Data()
+        while let chunk = try? handle.read(upToCount: chunkSize), !chunk.isEmpty {
+            pending.append(chunk)
+            // Stop at the last newline: a trailing fragment is either cut by
+            // the chunk or Codex mid-write, and waits for the next read.
+            guard let lastNewline = pending.lastIndex(of: newline) else { continue }
+            let complete = pending[pending.startIndex...lastNewline]
+            for line in complete.split(separator: newline, omittingEmptySubsequences: true) {
+                ingest(line: line, into: &state)
+            }
+            state.offset += UInt64(complete.count)
+            pending = Data(pending[pending.index(after: lastNewline)...])
+        }
         cache.files[path] = state
         isDirty = true
     }
 
     private static let turnContextMarker = Data("\"turn_context\"".utf8)
     private static let tokenCountMarker = Data("\"token_count\"".utf8)
+    private static let recordMarker = Data("\"token_usage_record\"".utf8)
 
     private static let timestampFormatters: [ISO8601DateFormatter] = {
         let fractional = ISO8601DateFormatter()
@@ -193,27 +241,38 @@ actor CodexCostService {
     private func ingest(line: Data.SubSequence, into state: inout FileState) {
         // Most lines are messages and tool output; a substring test is far
         // cheaper than parsing them to find out.
-        let isContext = line.range(of: Self.turnContextMarker) != nil
-        guard isContext || line.range(of: Self.tokenCountMarker) != nil,
+        guard line.range(of: Self.turnContextMarker) != nil
+                || line.range(of: Self.recordMarker) != nil
+                || (!state.hasRecords && line.range(of: Self.tokenCountMarker) != nil),
               let object = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
               let payload = object["payload"] as? [String: Any] else { return }
 
-        if object["type"] as? String == "turn_context" {
+        let usage: TokenTotals
+        switch object["type"] as? String {
+        case "turn_context":
             if let model = payload["model"] as? String { state.model = model }
             return
+        case "token_usage_record":
+            guard let recorded = Self.totals(payload["usage"]) else { return }
+            state.hasRecords = true
+            usage = recorded
+        default:
+            guard !state.hasRecords,
+                  payload["type"] as? String == "token_count",
+                  let info = payload["info"] as? [String: Any],
+                  let total = Self.totals(info["total_token_usage"]),
+                  let last = Self.totals(info["last_token_usage"]) else { return }
+            // A repeat of the previous total is the same turn reported again.
+            guard total != state.lastTotal else { return }
+            state.lastTotal = total
+            usage = last
         }
-        guard payload["type"] as? String == "token_count",
-              let info = payload["info"] as? [String: Any],
-              let total = Self.totals(info["total_token_usage"]),
-              let last = Self.totals(info["last_token_usage"]) else { return }
-        // A repeat of the previous total is the same turn reported again.
-        guard total != state.lastTotal else { return }
-        state.lastTotal = total
 
         guard let model = state.model, let price = codexPrices[model],
               let timestamp = object["timestamp"] as? String,
               let date = Self.timestampFormatters.lazy.compactMap({ $0.date(from: timestamp) }).first
         else { return }
+        let last = usage
         let uncached = Double(max(0, last.input - last.cached))
         let cost = (uncached * price.input
             + Double(last.cached) * price.cachedInput
@@ -235,7 +294,7 @@ actor CodexCostService {
     /// their spend should outlive them for as long as it is shown.
     private func prune(keeping scanned: Set<String>) {
         let calendar = Calendar.current
-        guard let cutoff = calendar.date(byAdding: .day, value: -codexRetentionDays,
+        guard let cutoff = calendar.date(byAdding: .day, value: -SpendData.retentionDays,
                                          to: calendar.startOfDay(for: Date())) else { return }
         for (path, var state) in cache.files {
             let kept = state.days.filter { day, _ in (SpendDay.date(from: day) ?? .distantPast) >= cutoff }

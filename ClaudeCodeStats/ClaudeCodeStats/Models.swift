@@ -268,6 +268,10 @@ extension SpendData {
     /// Days of history the chart plots and the longest total covers.
     static let windowDays = 30
 
+    /// Day rollups older than this are dropped from both spend caches. Must
+    /// exceed `windowDays` with room to spare.
+    static let retentionDays = 100
+
     /// Totals for today, the last 7 and the last `windowDays` days, plus the
     /// chart's days, from each tool's ledger. The window is rolling and shared
     /// with the chart, so the last-30-days total is exactly the sum of the bars.

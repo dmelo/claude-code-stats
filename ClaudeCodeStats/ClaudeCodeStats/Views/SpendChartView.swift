@@ -90,7 +90,8 @@ struct SpendChartView: View {
 
             Spacer(minLength: 0)
 
-            // Both shares, so the readout adds up to the total beside it.
+            // Both shares, so the readout accounts for the total beside it (to
+            // within a cent: each figure is rounded on its own).
             if showsCodex {
                 legendItem(.claude, day.claude.usd)
                 legendItem(.codex, day.codex.usd)
@@ -100,9 +101,7 @@ struct SpendChartView: View {
 
     private func legendItem(_ provider: SpendProvider, _ text: String) -> some View {
         HStack(spacing: 3) {
-            RoundedRectangle(cornerRadius: 1.5)
-                .fill(Theme.chartColor(for: provider))
-                .frame(width: 6, height: 6)
+            SpendSwatch(provider: provider)
             Text(text)
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(Theme.textSecondary)

@@ -55,9 +55,10 @@ enum UsageAccount: Identifiable, Hashable {
 /// reads no Codex session log: no limits card, no rings, no spend.
 enum CodexTracking {
     static let key = "trackCodex"
+    static let defaultValue = true
 
     static var isEnabled: Bool {
-        UserDefaults.standard.object(forKey: key) as? Bool ?? true
+        UserDefaults.standard.object(forKey: key) as? Bool ?? defaultValue
     }
 
     /// Whether Codex has been used on this Mac (a login file or a session-log
@@ -121,6 +122,8 @@ class UsageViewModel: ObservableObject {
 
     // API-equivalent spend, computed from the local transcripts
     @Published var spend: SpendData?
+    private var codexLedger: SpendLedger = [:]
+    private var spendGeneration = 0
 
     // RTK token savings, read from RTK's local history db. Stays nil when RTK
     // isn't installed, which keeps the card off the popover entirely.
@@ -227,6 +230,7 @@ class UsageViewModel: ObservableObject {
         do {
             entry = AccountUsage(usage: try await CodexUsageService.shared.fetchUsage())
         } catch {
+            guard accounts.contains(.codex) else { return }
             switch error as? UsageError {
             case .tokenExpired:
                 entry.needsLogin = true
@@ -240,6 +244,9 @@ class UsageViewModel: ObservableObject {
                 }
             }
         }
+        // Track Codex turned off while the request was out: drop the answer
+        // rather than bring the account's slot back.
+        guard accounts.contains(.codex) else { return }
         usageByAccount[id] = entry
     }
 
@@ -289,10 +296,24 @@ class UsageViewModel: ObservableObject {
     // endpoint's rate limit and is safe to recompute on every refresh. The scan
     // is incremental after the first one.
     func refreshSpend() async {
-        // Concurrently: separate actors over separate files.
-        async let claude = CostService.shared.fetchLedger()
-        async let codex: SpendLedger = CodexTracking.isEnabled ? await CodexCostService.shared.fetchLedger() : [:]
-        spend = SpendData.summarize(claude: await claude, codex: await codex)
+        // A later call (the Track Codex switch flipped mid-scan) supersedes
+        // this one: only the newest call publishes.
+        spendGeneration += 1
+        let generation = spendGeneration
+        let tracksCodex = CodexTracking.isEnabled
+        if !tracksCodex { codexLedger = [:] }
+        // Concurrently: separate actors over separate files. Claude's ledger is
+        // published as soon as it is ready, beside the last Codex one, so a cold
+        // Codex scan (seconds, on a large set of logs) doesn't hold up the card.
+        async let codex: SpendLedger = tracksCodex ? await CodexCostService.shared.fetchLedger() : [:]
+        let claude = await CostService.shared.fetchLedger()
+        guard generation == spendGeneration else { return }
+        spend = SpendData.summarize(claude: claude, codex: codexLedger)
+        guard tracksCodex else { return }
+        let codexResult = await codex
+        guard generation == spendGeneration else { return }
+        codexLedger = codexResult
+        spend = SpendData.summarize(claude: claude, codex: codexResult)
     }
 
     // RTK savings come from RTK's own local SQLite log, independent of the usage
