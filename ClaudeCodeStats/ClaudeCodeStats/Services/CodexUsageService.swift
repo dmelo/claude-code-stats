@@ -33,16 +33,20 @@ actor CodexUsageService {
         session = URLSession(configuration: config)
     }
 
-    /// `$CODEX_HOME/auth.json`, else ~/.codex/auth.json. The variable only
-    /// reaches the app when it is in the launch environment — a shell export
-    /// does not reach an app opened from Finder or as a login item; `launchctl
-    /// setenv CODEX_HOME …` does.
-    nonisolated static var authPath: String {
+    /// `$CODEX_HOME`, else ~/.codex. The variable only reaches the app when it
+    /// is in the launch environment — a shell export does not reach an app
+    /// opened from Finder or as a login item; `launchctl setenv CODEX_HOME …`
+    /// does.
+    nonisolated static var codexHome: String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        var codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"].flatMap { $0.isEmpty ? nil : $0 }
+        let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"].flatMap { $0.isEmpty ? nil : $0 }
             ?? "\(home)/.codex"
-        if codexHome == "~" || codexHome.hasPrefix("~/") { codexHome = home + codexHome.dropFirst() }
-        return codexHome + "/auth.json"
+        if codexHome == "~" || codexHome.hasPrefix("~/") { return home + codexHome.dropFirst() }
+        return codexHome
+    }
+
+    nonisolated static var authPath: String {
+        codexHome + "/auth.json"
     }
 
     /// Codex appears only where it is logged in with ChatGPT. An API key login

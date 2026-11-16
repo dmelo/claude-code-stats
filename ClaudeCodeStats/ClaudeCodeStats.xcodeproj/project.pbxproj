@@ -21,6 +21,7 @@
 		A17 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19 /* Models.swift */; };
 		A18 /* UsageHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20 /* UsageHistoryService.swift */; };
 		A19 /* CostService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B21 /* CostService.swift */; };
+		A28 /* CodexCostService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30 /* CodexCostService.swift */; };
 		A20 /* SpendCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B22 /* SpendCardView.swift */; };
 		A21 /* SpendChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B23 /* SpendChartView.swift */; };
 		A22 /* RTKSavingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24 /* RTKSavingsService.swift */; };
@@ -49,6 +50,7 @@
 		B19 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B20 /* UsageHistoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageHistoryService.swift; sourceTree = "<group>"; };
 		B21 /* CostService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostService.swift; sourceTree = "<group>"; };
+		B30 /* CodexCostService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexCostService.swift; sourceTree = "<group>"; };
 		B22 /* SpendCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendCardView.swift; sourceTree = "<group>"; };
 		B23 /* SpendChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpendChartView.swift; sourceTree = "<group>"; };
 		B24 /* RTKSavingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RTKSavingsService.swift; sourceTree = "<group>"; };
@@ -100,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				B21 /* CostService.swift */,
+				B30 /* CodexCostService.swift */,
 				B24 /* RTKSavingsService.swift */,
 				B27 /* AimuxService.swift */,
 				B29 /* CodexUsageService.swift */,
@@ -216,6 +219,7 @@
 				A17 /* Models.swift in Sources */,
 				A18 /* UsageHistoryService.swift in Sources */,
 				A19 /* CostService.swift in Sources */,
+				A28 /* CodexCostService.swift in Sources */,
 				A20 /* SpendCardView.swift in Sources */,
 				A21 /* SpendChartView.swift in Sources */,
 				A22 /* RTKSavingsService.swift in Sources */,

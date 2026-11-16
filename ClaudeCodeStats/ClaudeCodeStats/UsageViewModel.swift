@@ -45,8 +45,26 @@ enum UsageAccount: Identifiable, Hashable {
     /// exists: Codex rewrites the file when it refreshes, and one read landing
     /// mid-write would otherwise drop the account and its reading.
     static func discover(keepingCodex: Bool = false) -> [UsageAccount] {
-        let codex = CodexUsageService.hasLogin || (keepingCodex && CodexUsageService.hasAuthFile)
+        let codex = CodexTracking.isEnabled
+            && (CodexUsageService.hasLogin || (keepingCodex && CodexUsageService.hasAuthFile))
         return AimuxService.discoverAccounts().map(UsageAccount.claude) + (codex ? [.codex] : [])
+    }
+}
+
+/// The Settings switch for Codex. Off, the app makes no Codex request and
+/// reads no Codex session log: no limits card, no rings, no spend.
+enum CodexTracking {
+    static let key = "trackCodex"
+    static let defaultValue = true
+
+    static var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? defaultValue
+    }
+
+    /// Whether Codex has been used on this Mac (a login file or a session-log
+    /// folder), which is when Settings offers the switch.
+    static var isDetected: Bool {
+        CodexUsageService.hasAuthFile || CodexCostService.hasSessions
     }
 }
 
@@ -104,6 +122,8 @@ class UsageViewModel: ObservableObject {
 
     // API-equivalent spend, computed from the local transcripts
     @Published var spend: SpendData?
+    private var codexLedger: SpendLedger = [:]
+    private var spendGeneration = 0
 
     // RTK token savings, read from RTK's local history db. Stays nil when RTK
     // isn't installed, which keeps the card off the popover entirely.
@@ -150,11 +170,7 @@ class UsageViewModel: ObservableObject {
         defer { isLoading = false }
 
         // Pick up profiles added to or removed from aimux since the last pass.
-        let discovered = UsageAccount.discover(keepingCodex: accounts.contains(.codex))
-        if discovered != accounts {
-            accounts = discovered
-            usageByAccount = usageByAccount.filter { key, _ in discovered.contains { $0.id == key } }
-        }
+        rediscoverAccounts()
 
         // Concurrently: each account has its own token, service instance and
         // dictionary slot, and everything else they touch is main-actor state
@@ -172,6 +188,24 @@ class UsageViewModel: ObservableObject {
         await refreshStatus()
         await refreshSpend()
         await refreshRTKSavings()
+    }
+
+    private func rediscoverAccounts() {
+        let discovered = UsageAccount.discover(keepingCodex: accounts.contains(.codex))
+        if discovered != accounts {
+            accounts = discovered
+            usageByAccount = usageByAccount.filter { key, _ in discovered.contains { $0.id == key } }
+        }
+    }
+
+    /// Applies the Track Codex switch at once rather than at the next refresh:
+    /// the card, rings and spend share appear or go together.
+    func codexTrackingChanged() async {
+        rediscoverAccounts()
+        if accounts.contains(.codex) {
+            await refreshCodexUsage()
+        }
+        await refreshSpend()
     }
 
     private func refreshUsage(for account: UsageAccount) async {
@@ -196,6 +230,7 @@ class UsageViewModel: ObservableObject {
         do {
             entry = AccountUsage(usage: try await CodexUsageService.shared.fetchUsage())
         } catch {
+            guard accounts.contains(.codex) else { return }
             switch error as? UsageError {
             case .tokenExpired:
                 entry.needsLogin = true
@@ -209,6 +244,9 @@ class UsageViewModel: ObservableObject {
                 }
             }
         }
+        // Track Codex turned off while the request was out: drop the answer
+        // rather than bring the account's slot back.
+        guard accounts.contains(.codex) else { return }
         usageByAccount[id] = entry
     }
 
@@ -258,7 +296,24 @@ class UsageViewModel: ObservableObject {
     // endpoint's rate limit and is safe to recompute on every refresh. The scan
     // is incremental after the first one.
     func refreshSpend() async {
-        spend = await CostService.shared.fetchSpend()
+        // A later call (the Track Codex switch flipped mid-scan) supersedes
+        // this one: only the newest call publishes.
+        spendGeneration += 1
+        let generation = spendGeneration
+        let tracksCodex = CodexTracking.isEnabled
+        if !tracksCodex { codexLedger = [:] }
+        // Concurrently: separate actors over separate files. Claude's ledger is
+        // published as soon as it is ready, beside the last Codex one, so a cold
+        // Codex scan (seconds, on a large set of logs) doesn't hold up the card.
+        async let codex: SpendLedger = tracksCodex ? await CodexCostService.shared.fetchLedger() : [:]
+        let claude = await CostService.shared.fetchLedger()
+        guard generation == spendGeneration else { return }
+        spend = SpendData.summarize(claude: claude, codex: codexLedger)
+        guard tracksCodex else { return }
+        let codexResult = await codex
+        guard generation == spendGeneration else { return }
+        codexLedger = codexResult
+        spend = SpendData.summarize(claude: claude, codex: codexResult)
     }
 
     // RTK savings come from RTK's own local SQLite log, independent of the usage
